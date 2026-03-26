@@ -745,7 +745,9 @@ export default function EpubToXtcConverter() {
     if (ren.setHyphenation) ren.setHyphenation(settings.hyphenation)
     if (ren.setIgnoreDocMargins) ren.setIgnoreDocMargins(settings.ignoreDocMargins)
     if (ren.setFontHinting) ren.setFontHinting(settings.fontHinting)
-    if (ren.setFontAntialiasing) ren.setFontAntialiasing(settings.fontAntialiasing)
+    // Always render with full AA so dithering has intermediate gray values to work with.
+    // The quality mode controls output bit depth (1-bit/2-bit), not rendering quality.
+    if (ren.setFontAntialiasing) ren.setFontAntialiasing(2)
     try { ren.configureStatusBar(false, false, false, false, false, false, false, false, false) } catch { /* */ }
 
     setPages(ren.getPageCount())
@@ -1104,8 +1106,7 @@ export default function EpubToXtcConverter() {
   // Handle quality mode changes
   const handleQualityChange = useCallback((mode: "fast" | "hq") => {
     const hinting = mode === "fast" ? 1 : 2
-    const aa = mode === "fast" ? 0 : 2
-    update({ qualityMode: mode, fontHinting: hinting, fontAntialiasing: aa })
+    update({ qualityMode: mode, fontHinting: hinting, fontAntialiasing: 2 })
     requestAnimationFrame(() => applySettings())
   }, [update, applySettings])
 
