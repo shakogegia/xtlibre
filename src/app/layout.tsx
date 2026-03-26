@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import { cookies } from "next/headers";
 import "./globals.css";
 
@@ -32,7 +33,10 @@ export default async function RootLayout({
       lang="en"
       className={`${isDark ? "dark" : ""} ${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="h-full overflow-hidden font-sans">{children}</body>
+      <body className="h-full overflow-hidden font-sans">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
