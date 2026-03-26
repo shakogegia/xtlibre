@@ -559,7 +559,7 @@ export default function EpubToXtcConverter() {
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
   const [exportPct, setExportPct] = useState(0)
-  const [exportMsg, setExportMsg] = useState("")
+  const [exportMsg, setExportMsg] = useState<React.ReactNode>("")
   const [showExport, setShowExport] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [darkMode, setDarkMode] = useState(true)
@@ -839,10 +839,11 @@ export default function EpubToXtcConverter() {
     })
   }, [switchToFile])
 
-  const handleExportXtc = useCallback(async () => {
+  const handleExportXtc = useCallback(async (internal?: boolean) => {
     const ren = rendererRef.current, mod = moduleRef.current
-    if (!ren || !mod || processingRef.current) return
-    processingRef.current = true; setProcessing(true); setShowExport(true)
+    if (!ren || !mod) return
+    if (!internal && processingRef.current) return
+    if (!internal) { processingRef.current = true; setProcessing(true); setShowExport(true) }
 
     const startTime = performance.now()
     try {
@@ -871,7 +872,7 @@ export default function EpubToXtcConverter() {
 
       for (let pg = 0; pg < pageCount; pg++) {
         const pct = Math.round((pg / pageCount) * 100)
-        setExportPct(pct); setExportMsg(`Rendering page ${pg + 1} of ${pageCount}...`)
+        setExportPct(pct); setExportMsg(<>Rendering page <span className="font-mono">{pg + 1}</span> of <span className="font-mono">{pageCount}</span>...</>)
 
         ren.goToPage(pg); ren.renderCurrentPage()
         const buffer = ren.getFrameBuffer()
@@ -982,15 +983,15 @@ export default function EpubToXtcConverter() {
       const ext = isHQ ? ".xtch" : ".xtc"
       const filename = (metaRef.current.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
       downloadFile(buf, filename)
-      setExportMsg(`Done! ${totalTime}s total (${pageCount} pages)`)
+      setExportMsg(<>Done! <span className="font-mono">{totalTime}s</span> total (<span className="font-mono">{pageCount}</span> pages)</>)
       setExportPct(100)
-      setTimeout(() => setShowExport(false), 2000)
+      if (!internal) setTimeout(() => setShowExport(false), 2000)
     } catch (err) {
       console.error("Export error:", err)
       setExportMsg("Export failed!")
-      setTimeout(() => setShowExport(false), 2000)
+      if (!internal) setTimeout(() => setShowExport(false), 2000)
     } finally {
-      processingRef.current = false; setProcessing(false)
+      if (!internal) { processingRef.current = false; setProcessing(false) }
     }
   }, [])
 
@@ -1001,13 +1002,13 @@ export default function EpubToXtcConverter() {
     const totalFiles = filesRef.current.length
     try {
       for (let fi = 0; fi < totalFiles; fi++) {
-        setExportMsg(`Loading file ${fi + 1}/${totalFiles}...`)
+        setExportMsg(<>Loading file <span className="font-mono">{fi + 1}</span>/<span className="font-mono">{totalFiles}</span>...</>)
         setExportPct((fi / totalFiles) * 100)
         await loadEpub(filesRef.current[fi].file)
         setFileIdx(fi); fileIdxRef.current = fi
-        await handleExportXtc()
+        await handleExportXtc(true)
       }
-      setExportMsg(`All ${totalFiles} files exported!`)
+      setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files exported!</>)
       setExportPct(100)
       setTimeout(() => setShowExport(false), 3000)
     } catch (err) {
@@ -1637,22 +1638,24 @@ export default function EpubToXtcConverter() {
             </AccordionItem>
           </Accordion>
 
-          {/* Export progress */}
-          {showExport && (
-            <div className="my-3 space-y-1.5 px-1">
-              <Progress value={exportPct} className="h-2" />
-              <p className="text-[11px] text-muted-foreground text-center">{exportMsg}</p>
-            </div>
-          )}
-
           <div className="h-3" />
           </TabsContent>
         </Tabs>
 
         {/* Export buttons pinned to bottom */}
         <div className="px-4 py-3 border-t border-border/50 space-y-2 bg-card/80">
+          {showExport && (
+            <div className="space-y-1.5 px-1">
+              <Progress value={exportPct} className="h-2" />
+              <p className="text-[11px] text-muted-foreground text-center">{exportMsg}</p>
+            </div>
+          )}
           <Button className="w-full h-8 text-[12px] font-medium" disabled={!bookLoaded || processing} onClick={handleExportXtc}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            {processing ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            )}
             Export XTC
           </Button>
           {files.length > 1 && (
