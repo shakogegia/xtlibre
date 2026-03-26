@@ -172,6 +172,19 @@ const PROGRESS_BAR_HEIGHT = 14
 const PROGRESS_BAR_HEIGHT_FULLWIDTH = 20
 const PROGRESS_BAR_HEIGHT_EXTENDED = 28
 
+const STORAGE_KEY_SETTINGS = "xtc-settings"
+const STORAGE_KEY_DEVICE_COLOR = "xtc-device-color"
+const STORAGE_KEY_DARK_MODE = "xtc-dark-mode"
+
+function loadFromStorage<T>(key: string, fallback: T): T {
+  if (typeof window === "undefined") return fallback
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw === null) return fallback
+    return JSON.parse(raw) as T
+  } catch { return fallback }
+}
+
 // ── Helper functions (pure, no React) ──────────────────────────────
 
 function getPatternForLang(langTag: string): string {
@@ -529,13 +542,14 @@ function downloadFile(data: ArrayBuffer, filename: string) {
 // ── Main Component ─────────────────────────────────────────────────
 
 export default function EpubToXtcConverter() {
-  // Settings state
+  // Settings state (persisted to localStorage, hydrated after mount)
   const [s, _setS] = useState<Settings>(DEFAULT_SETTINGS)
   const sRef = useRef<Settings>(DEFAULT_SETTINGS)
   const setS = useCallback((updater: Settings | ((prev: Settings) => Settings)) => {
     _setS(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater
       sRef.current = next
+      try { localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(next)) } catch {}
       return next
     })
   }, [])
@@ -565,18 +579,36 @@ export default function EpubToXtcConverter() {
   const [darkMode, setDarkMode] = useState(true)
   const [deviceColor, setDeviceColor] = useState<DeviceColor>("black")
 
+  // Hydrate persisted state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
-    setDarkMode(document.documentElement.classList.contains("dark"))
-  }, [])
+    const savedSettings = loadFromStorage<Partial<Settings>>(STORAGE_KEY_SETTINGS, {})
+    if (Object.keys(savedSettings).length > 0) {
+      setS(prev => ({ ...prev, ...savedSettings }))
+    }
+    const savedColor = loadFromStorage<DeviceColor | null>(STORAGE_KEY_DEVICE_COLOR, null)
+    if (savedColor) setDeviceColor(savedColor)
+    const savedDark = loadFromStorage<boolean | null>(STORAGE_KEY_DARK_MODE, null)
+    if (savedDark === null) {
+      setDarkMode(document.documentElement.classList.contains("dark"))
+    } else {
+      setDarkMode(savedDark)
+      document.documentElement.classList.toggle("dark", savedDark)
+    }
+  }, [setS])
 
   const toggleDarkMode = useCallback(() => {
     setDarkMode(prev => {
       const next = !prev
       document.documentElement.classList.toggle("dark", next)
       document.cookie = `theme=${next ? "dark" : "light"}; path=/; max-age=${365 * 24 * 60 * 60}`
+      try { localStorage.setItem(STORAGE_KEY_DARK_MODE, JSON.stringify(next)) } catch {}
       return next
     })
   }, [])
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY_DEVICE_COLOR, JSON.stringify(deviceColor)) } catch {}
+  }, [deviceColor])
 
   // Refs
   const moduleRef = useRef<WasmModule>(null)
@@ -1038,7 +1070,8 @@ export default function EpubToXtcConverter() {
           },
         })
         moduleRef.current = mod
-        const ren = new mod.EpubRenderer(480, 800)
+        const dims = screenDimsRef.current
+        const ren = new mod.EpubRenderer(dims.screenWidth, dims.screenHeight)
         rendererRef.current = ren
         if (ren.initHyphenation) ren.initHyphenation("/hyph")
         await loadRequiredFonts()
@@ -1181,9 +1214,10 @@ export default function EpubToXtcConverter() {
   const bezelLeft   = chinSide === "left"   ? bz.chin : chinSide === "right"  ? bz.top : bz.side
   const totalW = bezelLeft + dims.screenWidth + bezelRight
   const totalH = bezelTop + dims.screenHeight + bezelBottom
-  // True-to-life CSS size: device physical mm → CSS pixels
-  const trueLifeW = bz.deviceWidthMm / 25.4 * TRUE_LIFE_CSS_PPI
-  const trueLifeH = bz.deviceHeightMm / 25.4 * TRUE_LIFE_CSS_PPI
+  // True-to-life CSS size: device physical mm → CSS pixels (swap for landscape)
+  const isLandscape = s.orientation === 90 || s.orientation === 270
+  const trueLifeW = (isLandscape ? bz.deviceHeightMm : bz.deviceWidthMm) / 25.4 * TRUE_LIFE_CSS_PPI
+  const trueLifeH = (isLandscape ? bz.deviceWidthMm : bz.deviceHeightMm) / 25.4 * TRUE_LIFE_CSS_PPI
 
   return (
     <div className="flex h-screen bg-background">
@@ -1786,19 +1820,21 @@ export default function EpubToXtcConverter() {
               {/* Page-turn buttons on chin bezel */}
               {(() => {
                 const cb = bz.chinButtons
-                const btnW = totalW * cb.widthPct
+                const isHoriz = chinSide === "bottom" || chinSide === "top"
+                // Button width is relative to the chin's cross-axis (short side), not total device width
+                const chinCrossLen = isHoriz ? totalW : totalH
+                const btnW = chinCrossLen * cb.widthPct
                 const totalBtnW = btnW * 2 + cb.gap
-                const startX = (totalW - totalBtnW) / 2
+                const startX = (chinCrossLen - totalBtnW) / 2
                 const chinStart = chinSide === "bottom" ? bezelTop + dims.screenHeight
                   : chinSide === "top" ? 0
                   : chinSide === "left" ? 0
                   : bezelLeft + dims.screenWidth
-                const chinLen = chinSide === "bottom" || chinSide === "top" ? bz.chin : bz.chin
+                const chinLen = bz.chin
                 const btnCenterOffset = chinStart + (chinLen - cb.height) * 0.75
 
                 return [-1, 1].map((side) => {
                   const btnX = startX + (side === -1 ? 0 : btnW + cb.gap)
-                  const isHoriz = chinSide === "bottom" || chinSide === "top"
                   const pos: React.CSSProperties = isHoriz
                     ? {
                         left: `${(btnX / totalW * 100).toFixed(2)}%`,
