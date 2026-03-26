@@ -1,36 +1,41 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# XTLibre
 
-## Getting Started
+EPUB-to-XTC converter for [Xteink](https://xteink.com) e-readers. Renders EPUBs in the browser via CREngine (WASM), previews them on a realistic device frame, and exports `.xtc` files ready to transfer to your device.
 
-First, run the development server:
+## Features
+
+- **Device preview** — realistic on-screen frames for Xteink X4 (480×800) and X3 (528×792)
+- **Configurable rendering** — font family, size, line spacing, margins, and hyphenation
+- **Landscape mode** — rotate the preview for wide-format reading
+- **Floyd–Steinberg dithering** — converts pages to e-ink-optimized 16-level grayscale
+- **Batch export** — export a single page or all pages at once as `.xtc`
+- **Page scrubber** — quickly jump through long books
+- **Persistent settings** — options are saved to `localStorage`
+
+## Supported devices
+
+| Device     | Resolution |
+| ---------- | ---------- |
+| Xteink X4  | 480 × 800  |
+| Xteink X3  | 528 × 792  |
+
+## Getting started
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000), drop an EPUB file, and start previewing.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Tech stack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- [Next.js 16](https://nextjs.org) (App Router) + React 19 + TypeScript
+- [Tailwind CSS 4](https://tailwindcss.com)
+- [shadcn/ui](https://ui.shadcn.com) (base-nova) on @base-ui/react
+- [CREngine WASM](https://github.com/nickelc/crengine-wasm) for EPUB rendering
+- Web Worker for Floyd–Steinberg dithering
 
-## Learn More
+## License
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+[MIT](LICENSE)
