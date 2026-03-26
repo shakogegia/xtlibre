@@ -1075,6 +1075,11 @@ export default function EpubToXtcConverter() {
         rendererRef.current = ren
         if (ren.initHyphenation) ren.initHyphenation("/hyph")
         await loadRequiredFonts()
+        // Load persisted font if it differs from the default
+        const persistedFont = sRef.current.fontFace
+        if (persistedFont && persistedFont !== "Literata" && !loadedFontsRef.current.has(persistedFont)) {
+          await loadFontFamily(persistedFont)
+        }
         setWasmReady(true)
       } catch (err) { console.error("Failed to load CREngine:", err) }
     }
