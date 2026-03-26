@@ -32,21 +32,21 @@ const DEVICE_BEZELS: Record<DeviceType, {
 }> = {
   x4: {
     deviceWidthMm: 69, deviceHeightMm: 114,
-    side: 59, top: 52, chin: 136,
+    side: 59, top: 52, chin: 110,
     bodyRadius: 26, screenRadius: 8,
     sideButtons: [
       { offsetPct: 0.10, size: 18 },  // Power
     ],
-    chinButtons: { widthPct: 0.35, height: 14, gap: 12 },
+    chinButtons: { widthPct: 0.35, height: 18, gap: 12 },
   },
   x3: {
     deviceWidthMm: 76, deviceHeightMm: 124,
-    side: 64, top: 56, chin: 148,
+    side: 64, top: 56, chin: 120,
     bodyRadius: 28, screenRadius: 8,
     sideButtons: [
       { offsetPct: 0.10, size: 20 },
     ],
-    chinButtons: { widthPct: 0.35, height: 16, gap: 14 },
+    chinButtons: { widthPct: 0.35, height: 20, gap: 14 },
   },
 }
 
@@ -1755,7 +1755,7 @@ export default function EpubToXtcConverter() {
                   : chinSide === "left" ? 0
                   : bezelLeft + dims.screenWidth
                 const chinLen = chinSide === "bottom" || chinSide === "top" ? bz.chin : bz.chin
-                const btnCenterOffset = chinStart + (chinLen - cb.height) / 2
+                const btnCenterOffset = chinStart + (chinLen - cb.height) * 0.75
 
                 return [-1, 1].map((side) => {
                   const btnX = startX + (side === -1 ? 0 : btnW + cb.gap)
