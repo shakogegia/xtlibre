@@ -662,24 +662,20 @@ export default function EpubToXtcConverter() {
     const ctx = canvas.getContext("2d", { willReadFrequently: true })!
     const imageData = ctx.createImageData(sw, sh)
     for (let i = 0; i < buffer.length; i++) imageData.data[i] = buffer[i]
-    ctx.putImageData(imageData, 0, 0)
 
     const isHQ = settings.qualityMode === "hq"
     const bits = isHQ ? 2 : 1
     if (settings.enableDithering) {
       applyDitheringSyncToData(imageData.data, sw, sh, bits, settings.ditherStrength, isHQ)
-      ctx.putImageData(imageData, 0, 0)
     } else {
-      const img2 = ctx.getImageData(0, 0, sw, sh)
-      quantizeImageData(img2.data, bits, isHQ)
-      ctx.putImageData(img2, 0, 0)
+      quantizeImageData(imageData.data, bits, isHQ)
     }
 
     if (settings.enableNegative) {
-      const img3 = ctx.getImageData(0, 0, sw, sh)
-      applyNegativeToData(img3.data)
-      ctx.putImageData(img3, 0, 0)
+      applyNegativeToData(imageData.data)
     }
+
+    ctx.putImageData(imageData, 0, 0)
 
     const curPage = ren.getCurrentPage()
     const totalPages = ren.getPageCount()
@@ -730,15 +726,42 @@ export default function EpubToXtcConverter() {
     renderPreview()
   }, [renderPreview])
 
+  const reformatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const renderTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const updateAndReformat = useCallback((patch: Partial<Settings>) => {
     update(patch)
-    requestAnimationFrame(() => applySettings())
+    if (reformatTimerRef.current !== null) clearTimeout(reformatTimerRef.current)
+    reformatTimerRef.current = setTimeout(() => {
+      reformatTimerRef.current = null
+      requestAnimationFrame(() => applySettings())
+    }, 100)
   }, [update, applySettings])
 
   const updateAndRender = useCallback((patch: Partial<Settings>) => {
     update(patch)
-    requestAnimationFrame(() => renderPreview())
+    if (renderTimerRef.current !== null) clearTimeout(renderTimerRef.current)
+    renderTimerRef.current = setTimeout(() => {
+      renderTimerRef.current = null
+      requestAnimationFrame(() => renderPreview())
+    }, 50)
   }, [update, renderPreview])
+
+  const flushReformat = useCallback(() => {
+    if (reformatTimerRef.current !== null) {
+      clearTimeout(reformatTimerRef.current)
+      reformatTimerRef.current = null
+      applySettings()
+    }
+  }, [applySettings])
+
+  const flushRender = useCallback(() => {
+    if (renderTimerRef.current !== null) {
+      clearTimeout(renderTimerRef.current)
+      renderTimerRef.current = null
+      renderPreview()
+    }
+  }, [renderPreview])
 
   const loadEpub = useCallback(async (file: File) => {
     const mod = moduleRef.current, ren = rendererRef.current
@@ -1089,6 +1112,11 @@ export default function EpubToXtcConverter() {
     ren.nextPage(); renderPreview()
   }, [renderPreview])
 
+  const goToPage = useCallback((pg: number) => {
+    const ren = rendererRef.current; if (!ren) return
+    ren.goToPage(pg); renderPreview()
+  }, [renderPreview])
+
   // Keyboard nav
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -1372,7 +1400,8 @@ export default function EpubToXtcConverter() {
                     <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.fontSize}px</span>
                   </div>
                   <Slider value={[s.fontSize]} min={14} max={48} step={1}
-                    onValueChange={(v) => updateAndReformat({ fontSize: sv(v) })} />
+                    onValueChange={(v) => updateAndReformat({ fontSize: sv(v) })}
+                    onValueCommitted={flushReformat} />
                 </div>
 
                 <div>
@@ -1381,7 +1410,8 @@ export default function EpubToXtcConverter() {
                     <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.fontWeight}</span>
                   </div>
                   <Slider value={[s.fontWeight]} min={100} max={900} step={100}
-                    onValueChange={(v) => updateAndReformat({ fontWeight: sv(v) })} />
+                    onValueChange={(v) => updateAndReformat({ fontWeight: sv(v) })}
+                    onValueCommitted={flushReformat} />
                 </div>
 
                 <div>
@@ -1390,7 +1420,8 @@ export default function EpubToXtcConverter() {
                     <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.lineHeight}%</span>
                   </div>
                   <Slider value={[s.lineHeight]} min={80} max={200} step={1}
-                    onValueChange={(v) => updateAndReformat({ lineHeight: sv(v) })} />
+                    onValueChange={(v) => updateAndReformat({ lineHeight: sv(v) })}
+                    onValueCommitted={flushReformat} />
                 </div>
 
                 <div>
@@ -1399,7 +1430,8 @@ export default function EpubToXtcConverter() {
                     <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.margin}px</span>
                   </div>
                   <Slider value={[s.margin]} min={0} max={50} step={1}
-                    onValueChange={(v) => updateAndReformat({ margin: sv(v) })} />
+                    onValueChange={(v) => updateAndReformat({ margin: sv(v) })}
+                    onValueCommitted={flushReformat} />
                 </div>
 
                 <div className="flex items-center gap-2 pt-0.5">
@@ -1453,7 +1485,8 @@ export default function EpubToXtcConverter() {
                       <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.ditherStrength}%</span>
                     </div>
                     <Slider value={[s.ditherStrength]} min={0} max={100} step={1}
-                      onValueChange={(v) => updateAndRender({ ditherStrength: sv(v) })} />
+                      onValueChange={(v) => updateAndRender({ ditherStrength: sv(v) })}
+                      onValueCommitted={flushRender} />
                   </div>
                 )}
 
@@ -1553,7 +1586,8 @@ export default function EpubToXtcConverter() {
                         <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.progressFontSize}px</span>
                       </div>
                       <Slider value={[s.progressFontSize]} min={10} max={20} step={1}
-                        onValueChange={(v) => updateAndRender({ progressFontSize: sv(v) })} />
+                        onValueChange={(v) => updateAndRender({ progressFontSize: sv(v) })}
+                        onValueCommitted={flushRender} />
                     </div>
 
                     <div>
@@ -1562,7 +1596,8 @@ export default function EpubToXtcConverter() {
                         <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.progressEdgeMargin}px</span>
                       </div>
                       <Slider value={[s.progressEdgeMargin]} min={0} max={30} step={1}
-                        onValueChange={(v) => updateAndReformat({ progressEdgeMargin: sv(v) })} />
+                        onValueChange={(v) => updateAndReformat({ progressEdgeMargin: sv(v) })}
+                        onValueCommitted={flushReformat} />
                     </div>
 
                     <div>
@@ -1571,7 +1606,8 @@ export default function EpubToXtcConverter() {
                         <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{s.progressSideMargin}px</span>
                       </div>
                       <Slider value={[s.progressSideMargin]} min={0} max={30} step={1}
-                        onValueChange={(v) => updateAndRender({ progressSideMargin: sv(v) })} />
+                        onValueChange={(v) => updateAndRender({ progressSideMargin: sv(v) })}
+                        onValueCommitted={flushRender} />
                     </div>
                   </>
                 )}
@@ -1696,7 +1732,7 @@ export default function EpubToXtcConverter() {
             </div>
           )}
 
-          <div className={bookLoaded ? "" : "hidden"}>
+          <div className={bookLoaded ? "flex flex-col items-center gap-20" : "hidden"}>
             {/* Device frame — realistic Xteink bezel mockup (true-to-life size) */}
             <div
               className="relative"
@@ -1784,6 +1820,22 @@ export default function EpubToXtcConverter() {
                 })
               })()}
             </div>
+
+            {/* Page scrubber */}
+            {pages > 1 && (
+              <div className="flex items-center gap-3 px-1 w-full">
+                <Slider
+                  min={0}
+                  max={pages - 1}
+                  step={1}
+                  value={[page]}
+                  onValueChange={(val) => goToPage(Array.isArray(val) ? val[0] : val)}
+                />
+                <span className="text-[11px] font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                  {page + 1} / {pages}
+                </span>
+              </div>
+            )}
           </div>
 
           {loading && (
