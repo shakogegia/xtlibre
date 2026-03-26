@@ -57,8 +57,8 @@ const DEVICE_COLORS: Record<DeviceColor, {
   highlight: string; screenBorder: string; shadow: string
 }> = {
   black: {
-    body: "linear-gradient(160deg, #2c2c34 0%, #1e1e26 35%, #131318 100%)",
-    button: "linear-gradient(180deg, #242430 0%, #1a1a24 100%)",
+    body: "linear-gradient(160deg, #3a3a44 0%, #2e2e38 35%, #232328 100%)",
+    button: "linear-gradient(180deg, #333340 0%, #282834 100%)",
     slot: "rgba(0,0,0,0.3)",
     highlight: "inset 0 1px 0 rgba(255,255,255,0.06), inset 0 -1px 0 rgba(0,0,0,0.3)",
     screenBorder: "inset 0 0 0 1px rgba(0,0,0,0.5), inset 0 2px 6px rgba(0,0,0,0.2)",
