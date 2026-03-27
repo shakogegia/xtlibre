@@ -27,6 +27,16 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS calibre_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    url TEXT NOT NULL,
+    username TEXT NOT NULL DEFAULT '',
+    password TEXT NOT NULL DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
 export interface Book {
   id: string
   title: string
@@ -53,6 +63,44 @@ const stmts = {
   getById: db.prepare(`SELECT * FROM books WHERE id = ?`),
   deleteById: db.prepare(`DELETE FROM books WHERE id = ?`),
   getCover: db.prepare(`SELECT cover_thumbnail FROM books WHERE id = ?`),
+}
+
+export interface CalibreConfig {
+  url: string
+  username: string
+  password: string
+}
+
+const calibreStmts = {
+  get: db.prepare(`SELECT url, username, password FROM calibre_config WHERE id = 1`),
+  upsert: db.prepare(`
+    INSERT INTO calibre_config (id, url, username, password, updated_at)
+    VALUES (1, @url, @username, @password, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      url = @url,
+      username = @username,
+      password = @password,
+      updated_at = datetime('now')
+  `),
+  delete: db.prepare(`DELETE FROM calibre_config WHERE id = 1`),
+  getPassword: db.prepare(`SELECT password FROM calibre_config WHERE id = 1`),
+}
+
+export function getCalibreConfig(): CalibreConfig | null {
+  return (calibreStmts.get.get() as CalibreConfig) ?? null
+}
+
+export function setCalibreConfig(config: CalibreConfig): void {
+  calibreStmts.upsert.run(config)
+}
+
+export function deleteCalibreConfig(): void {
+  calibreStmts.delete.run()
+}
+
+export function getCalibrePassword(): string | null {
+  const row = calibreStmts.getPassword.get() as { password: string } | undefined
+  return row?.password ?? null
 }
 
 export function insertBook(book: {
