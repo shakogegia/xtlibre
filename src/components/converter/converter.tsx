@@ -297,6 +297,10 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     }
   }, [])
 
+  useEffect(() => {
+    fetchLibraryBooks()
+  }, [fetchLibraryBooks])
+
   const saveEpubToLibrary = useCallback(async (file: File, bookMeta: BookMetadata): Promise<string | null> => {
     try {
       const formData = new FormData()
@@ -1021,7 +1025,6 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
         libraryBooks={libraryBooks} libraryLoading={libraryLoading}
         openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
-        fetchLibraryBooks={fetchLibraryBooks}
         bookLoaded={bookLoaded} processing={processing}
         showExport={showExport} exportPct={exportPct} exportMsg={exportMsg}
         saving={saving} saveMsg={saveMsg}
