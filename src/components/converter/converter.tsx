@@ -17,6 +17,7 @@ import {
   PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_DEVICE_COLOR,
   loadFromStorage,
 } from "@/lib/types"
+import { type CustomFont } from "@/lib/db"
 import { saveSettings } from "@/app/actions"
 import {
   type OpdsEntry, type OpdsFeed,
@@ -27,7 +28,11 @@ import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, gener
 import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
-export function Converter({ initialTab, initialSettings }: { initialTab: string; initialSettings: Settings }) {
+export function Converter({
+  initialTab, initialSettings, initialFonts,
+}: {
+  initialTab: string; initialSettings: Settings; initialFonts: CustomFont[]
+}) {
   // Settings state (loaded server-side from DB, saved via server action on change)
   const [s, _setS] = useState<Settings>(initialSettings)
   const sRef = useRef<Settings>(initialSettings)
@@ -72,6 +77,11 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   const [opdsSearch, setOpdsSearch] = useState("")
   const [opdsNavStack, setOpdsNavStack] = useState<string[]>([])
   const [opdsDownloading, setOpdsDownloading] = useState<Set<string>>(new Set())
+
+  // Custom fonts state
+  const [customFonts, setCustomFonts] = useState(initialFonts)
+  const customFontsRef = useRef(initialFonts)
+  useEffect(() => { customFontsRef.current = customFonts }, [customFonts])
 
   // Library state
   const [libraryBooks, setLibraryBooks] = useState<Array<{
@@ -136,9 +146,17 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   const loadFontFamily = useCallback(async (familyName: string): Promise<boolean> => {
     if (loadedFontsRef.current.has(familyName)) return true
     const family = FONT_FAMILIES[familyName]
-    if (!family) return false
-    const results = await Promise.all(family.variants.map(v => loadFontFromUrl(v.url, v.file)))
-    if (results.some(r => r)) { loadedFontsRef.current.add(familyName); return true }
+    if (family) {
+      const results = await Promise.all(family.variants.map(v => loadFontFromUrl(v.url, v.file)))
+      if (results.some(r => r)) { loadedFontsRef.current.add(familyName); return true }
+      return false
+    }
+    // Check custom fonts
+    const custom = customFontsRef.current.find(f => f.name === familyName)
+    if (custom) {
+      const ok = await loadFontFromUrl(`/api/fonts/${custom.id}/file`, custom.filename)
+      if (ok) { loadedFontsRef.current.add(familyName); return true }
+    }
     return false
   }, [loadFontFromUrl])
 
@@ -476,6 +494,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         if (res.ok) {
           const data = await res.json()
           bookId = data.id
+          fetchLibraryBooks()
         }
       } catch (err) {
         console.error("Auto-save Calibre EPUB error:", err)
@@ -504,7 +523,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         return next
       })
     }
-  }, [addFiles])
+  }, [addFiles, fetchLibraryBooks])
 
   const opdsSaveSettings = useCallback(async (config: { url: string; username: string; password: string }) => {
     try {
@@ -591,7 +610,10 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     }
 
     const res = await fetch("/api/library", { method: "POST", body: formData })
-    if (!res.ok) throw new Error("Upload failed")
+    if (!res.ok) {
+      const text = await res.text().catch(() => "")
+      throw new Error(`Upload failed: ${res.status} ${text}`)
+    }
     return res.json()
   }, [])
 
@@ -823,6 +845,31 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     requestAnimationFrame(() => applySettings())
   }, [update, loadFontFamily, applySettings])
 
+  // Custom font upload/delete via API
+  const uploadCustomFont = useCallback(async (file: File) => {
+    const form = new FormData()
+    form.append("file", file)
+    const resp = await fetch("/api/fonts", { method: "POST", body: form })
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({ error: "Upload failed" }))
+      throw new Error(body.error || "Upload failed")
+    }
+    const font = await resp.json()
+    setCustomFonts(prev => [...prev, font])
+    return font as { id: string; name: string; filename: string }
+  }, [])
+
+  const deleteCustomFont = useCallback(async (id: string) => {
+    const fontName = customFontsRef.current.find(f => f.id === id)?.name
+    const resp = await fetch(`/api/fonts/${id}`, { method: "DELETE" })
+    if (!resp.ok) throw new Error("Delete failed")
+    setCustomFonts(prev => prev.filter(f => f.id !== id))
+    // If the deleted font is currently selected, reset to default
+    if (fontName && sRef.current.fontFace === fontName) {
+      handleFontChange("Literata")
+    }
+  }, [handleFontChange])
+
   // Handle hyphenation changes
   const handleHyphenationChange = useCallback(async (val: number) => {
     update({ hyphenation: val })
@@ -870,29 +917,6 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     return () => document.removeEventListener("keydown", handler)
   }, [prevPage, nextPage])
 
-  // Custom font upload
-  const fontInputRef = useRef<HTMLInputElement>(null)
-  const [customFontName, setCustomFontName] = useState("")
-
-  const handleCustomFont = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    const mod = moduleRef.current, ren = rendererRef.current
-    if (!file || !mod || !ren) return
-    try {
-      const data = new Uint8Array(await file.arrayBuffer())
-      const ptr = mod.allocateMemory(data.length)
-      mod.HEAPU8.set(data, ptr)
-      const name = ren.registerFontFromMemory(ptr, data.length, file.name)
-      mod.freeMemory(ptr)
-      if (name) {
-        setCustomFontName(name)
-        update({ fontFace: name })
-        requestAnimationFrame(() => applySettings())
-      }
-    } catch { /* */ }
-    e.target.value = ""
-  }, [update, applySettings])
-
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -910,12 +934,12 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         initialTab={initialTab}
         fileInputRef={fileInputRef}
         addFiles={addFiles} dragOver={dragOver} setDragOver={setDragOver}
-        s={s} meta={meta} toc={toc} customFontName={customFontName}
+        s={s} meta={meta} toc={toc}
         update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
         flushReformat={flushReformat} flushRender={flushRender}
         handleFontChange={handleFontChange} handleQualityChange={handleQualityChange}
         handleHyphenationChange={handleHyphenationChange} handleHyphenLangChange={handleHyphenLangChange}
-        handleCustomFont={handleCustomFont} fontInputRef={fontInputRef}
+        customFonts={customFonts} uploadCustomFont={uploadCustomFont} deleteCustomFont={deleteCustomFont}
         renderPreview={renderPreview} rendererRef={rendererRef}
         calibreConnected={calibreConnected} opdsFeed={opdsFeed}
         opdsLoading={opdsLoading} opdsError={opdsError}
@@ -925,6 +949,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         setOpdsError={setOpdsError}
         opdsBrowse={opdsBrowse} opdsBack={opdsBack}
         opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
+        activeBookId={files[0]?.libraryBookId ?? null}
         libraryBooks={libraryBooks} libraryLoading={libraryLoading}
         openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
         deleteLibraryBook={deleteLibraryBook}
