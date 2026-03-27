@@ -14,7 +14,7 @@ import {
   type WasmModule, type Renderer, type TocItem, type FileInfo, type BookMetadata,
   type Settings, type DeviceColor,
   DEFAULT_SETTINGS, PROGRESS_BAR_HEIGHT, PROGRESS_BAR_HEIGHT_FULLWIDTH,
-  PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_SETTINGS, STORAGE_KEY_DEVICE_COLOR,
+  PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_DEVICE_COLOR,
   loadFromStorage,
 } from "@/lib/types"
 import {
@@ -24,6 +24,9 @@ import {
 } from "@/lib/opds"
 import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData, downloadFile } from "@/lib/image-processing"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
+
+// TODO(task-6): remove once settings are fully migrated to SQLite
+const STORAGE_KEY_SETTINGS = "xtc-settings"
 
 export function Converter({ initialTab }: { initialTab: string }) {
   // Settings state (persisted to localStorage, hydrated after mount)

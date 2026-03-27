@@ -1,4 +1,4 @@
-import { type DeviceType } from "@/lib/config"
+import { type Settings as SettingsType, DEFAULT_SETTINGS as _DEFAULT_SETTINGS } from "@/lib/settings-schema"
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type WasmModule = any
@@ -24,81 +24,15 @@ export interface BookMetadata {
   language?: string
 }
 
-export interface Settings {
-  deviceType: DeviceType
-  orientation: number
-  fontSize: number
-  fontWeight: number
-  lineHeight: number
-  margin: number
-  fontFace: string
-  textAlign: number
-  wordSpacing: number
-  hyphenation: number
-  hyphenationLang: string
-  ignoreDocMargins: boolean
-  qualityMode: "fast" | "hq"
-  enableDithering: boolean
-  ditherStrength: number
-  enableNegative: boolean
-  enableProgressBar: boolean
-  progressPosition: "top" | "bottom"
-  showProgressLine: boolean
-  showChapterMarks: boolean
-  showChapterProgress: boolean
-  progressFullWidth: boolean
-  showPageInfo: boolean
-  showBookPercent: boolean
-  showChapterPage: boolean
-  showChapterPercent: boolean
-  progressFontSize: number
-  progressEdgeMargin: number
-  progressSideMargin: number
-  fontHinting: number
-  fontAntialiasing: number
-}
+export type Settings = SettingsType
+export const DEFAULT_SETTINGS = _DEFAULT_SETTINGS
 
 export type DeviceColor = "black" | "white"
-
-export const DEFAULT_SETTINGS: Settings = {
-  deviceType: "x4",
-  orientation: 0,
-  fontSize: 22,
-  fontWeight: 400,
-  lineHeight: 120,
-  margin: 20,
-  fontFace: "Literata",
-  textAlign: -1,
-  wordSpacing: 100,
-  hyphenation: 2,
-  hyphenationLang: "auto",
-  ignoreDocMargins: false,
-  qualityMode: "fast",
-  enableDithering: true,
-  ditherStrength: 70,
-  enableNegative: false,
-  enableProgressBar: true,
-  progressPosition: "bottom",
-  showProgressLine: true,
-  showChapterMarks: true,
-  showChapterProgress: false,
-  progressFullWidth: false,
-  showPageInfo: true,
-  showBookPercent: true,
-  showChapterPage: true,
-  showChapterPercent: false,
-  progressFontSize: 14,
-  progressEdgeMargin: 0,
-  progressSideMargin: 0,
-  fontHinting: 1,
-  fontAntialiasing: 2,
-}
 
 export const PROGRESS_BAR_HEIGHT = 14
 export const PROGRESS_BAR_HEIGHT_FULLWIDTH = 20
 export const PROGRESS_BAR_HEIGHT_EXTENDED = 28
 
-export const STORAGE_KEY_SETTINGS = "xtc-settings"
 export const STORAGE_KEY_DEVICE_COLOR = "xtc-device-color"
 
 export function loadFromStorage<T>(key: string, fallback: T): T {
