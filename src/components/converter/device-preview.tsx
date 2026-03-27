@@ -152,24 +152,25 @@ export function DevicePreview({
           })()}
         </div>
 
-        {/* Page scrubber */}
-        {pages > 1 && (
-          <div className="flex items-center gap-3 px-1 w-full">
-            <Slider
-              min={0}
-              max={pages - 1}
-              step={1}
-              value={[page]}
-              onValueChange={(val) => goToPage(Array.isArray(val) ? val[0] : val)}
-            />
-            <span className="text-[11px] font-mono tabular-nums text-muted-foreground whitespace-nowrap">
-              {page + 1} / {pages}
-            </span>
-          </div>
-        )}
+        {/* Controls below device */}
+        <div className="flex flex-col gap-2 w-full px-1">
+          {/* Page scrubber */}
+          {pages > 1 && (
+            <div className="flex items-center gap-3">
+              <Slider
+                min={0}
+                max={pages - 1}
+                step={1}
+                value={[page]}
+                onValueChange={(val) => goToPage(Array.isArray(val) ? val[0] : val)}
+              />
+              <span className="text-[11px] font-mono tabular-nums text-muted-foreground whitespace-nowrap">
+                {page + 1} / {pages}
+              </span>
+            </div>
+          )}
 
-        {/* Generate XTC */}
-        <div className="flex items-center gap-3 px-1 w-full">
+          {/* Generate XTC */}
           <Button
             className="w-full h-8 text-[12px] font-medium"
             disabled={!bookLoaded || processing}

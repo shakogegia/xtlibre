@@ -391,29 +391,6 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     loadEpub(file)
   }, [loadEpub])
 
-  const switchToFile = useCallback(async (index: number) => {
-    if (index < 0 || index >= filesRef.current.length || processingRef.current) return
-    setFileIdx(index); fileIdxRef.current = index
-    const fi = filesRef.current[index]
-    await loadEpub(fi.file)
-    fi.loaded = true
-  }, [loadEpub])
-
-  const removeFile = useCallback((index: number) => {
-    setFiles(prev => {
-      const next = [...prev]
-      next.splice(index, 1)
-      filesRef.current = next
-      if (next.length === 0) { setBookLoaded(false); setFileIdx(0); fileIdxRef.current = 0 }
-      else if (index <= fileIdxRef.current) {
-        const ni = Math.max(0, fileIdxRef.current - 1)
-        setFileIdx(ni); fileIdxRef.current = ni
-        switchToFile(ni)
-      }
-      return next
-    })
-  }, [switchToFile])
-
   // ── OPDS functions ──
 
   const opdsBrowse = useCallback(async (path?: string, append?: boolean) => {
