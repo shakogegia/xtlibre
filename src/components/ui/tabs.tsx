@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useEffect, useState } from "react"
+import { useCallback, useState } from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -20,17 +20,15 @@ function Tabs({
   onValueChange,
   ...props
 }: TabsProps) {
-  // Start with undefined so server and client render the same initial value
-  // (defaultValue), then sync from the URL after hydration.
-  const [urlValue, setUrlValue] = useState<TabsPrimitive.Root.Props["value"]>(undefined)
-
-  useEffect(() => {
-    if (!urlSync) return
+  // Read URL param eagerly so the first client render already shows the
+  // correct tab — avoids a visible flash from defaultValue → URL value.
+  const [urlValue, setUrlValue] = useState<TabsPrimitive.Root.Props["value"]>(() => {
+    if (!urlSync || typeof window === "undefined") return undefined
     const param = new URLSearchParams(window.location.search).get(urlSync)
-    if (param === null) return
+    if (param === null) return undefined
     const num = Number(param)
-    setUrlValue(Number.isFinite(num) ? num : param)
-  }, [urlSync])
+    return Number.isFinite(num) ? num : param
+  })
 
   const isControlled = valueProp !== undefined
   const activeValue = urlSync

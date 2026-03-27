@@ -1,15 +1,10 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { FilesTab } from "@/components/converter/files-tab"
-import { OptionsTab } from "@/components/converter/options-tab"
-import { CalibreTab } from "@/components/converter/calibre-tab"
+import { Sidebar } from "@/components/converter/sidebar"
 import { CalibreDialog } from "@/components/converter/calibre-dialog"
-import { LibraryTab } from "@/components/converter/library-tab"
-import { ExportBar } from "@/components/converter/export-bar"
 import { Toolbar } from "@/components/converter/toolbar"
 import { DevicePreview } from "@/components/converter/device-preview"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   FONT_FAMILIES, ARABIC_FONTS,
 } from "@/lib/config"
@@ -1007,67 +1002,35 @@ export default function EpubToXtcConverter() {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Sidebar */}
-      <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-        <Tabs urlSync="tab" defaultValue={0} onValueChange={(v) => { if (v === 2 && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse(); if (v === 3) fetchLibraryBooks() }} className="flex-1 flex flex-col min-h-0 gap-0">
-          <div className="flex items-center px-4 py-2 border-b border-border/50">
-            <TabsList className="w-full !h-7 p-0.5">
-              <TabsTrigger value={0} className="text-[12px]">Files</TabsTrigger>
-              <TabsTrigger value={1} className="text-[12px]">Options</TabsTrigger>
-              <TabsTrigger value={2} className="text-[12px]">Calibre</TabsTrigger>
-              <TabsTrigger value={3} className="text-[12px]">Library</TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value={0} className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
-            <FilesTab
-              files={files} fileIdx={fileIdx} fileInputRef={fileInputRef}
-              addFiles={addFiles} switchToFile={switchToFile} removeFile={removeFile}
-              dragOver={dragOver} setDragOver={setDragOver}
-              setFiles={setFiles} filesRef={filesRef} setBookLoaded={setBookLoaded}
-            />
-          </TabsContent>
-
-          <TabsContent value={1} className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
-            <OptionsTab
-              s={s} meta={meta} toc={toc} customFontName={customFontName}
-              update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
-              flushReformat={flushReformat} flushRender={flushRender}
-              handleFontChange={handleFontChange} handleQualityChange={handleQualityChange}
-              handleHyphenationChange={handleHyphenationChange} handleHyphenLangChange={handleHyphenLangChange}
-              handleCustomFont={handleCustomFont} fontInputRef={fontInputRef}
-              renderPreview={renderPreview} rendererRef={rendererRef}
-            />
-          </TabsContent>
-
-          <TabsContent value={2} className="flex-1 min-h-0 flex flex-col px-4 pt-3">
-            <CalibreTab
-              calibreConnected={calibreConnected} opdsFeed={opdsFeed}
-              opdsLoading={opdsLoading} opdsError={opdsError}
-              opdsSearch={opdsSearch} opdsNavStack={opdsNavStack}
-              opdsDownloading={opdsDownloading}
-              setOpdsSettingsOpen={setOpdsSettingsOpen} setOpdsSearch={setOpdsSearch}
-              setOpdsError={setOpdsError}
-              opdsBrowse={opdsBrowse} opdsBack={opdsBack}
-              opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
-            />
-          </TabsContent>
-          <TabsContent value={3} className="flex-1 min-h-0 flex flex-col px-4 pt-3">
-            <LibraryTab
-              libraryBooks={libraryBooks} libraryLoading={libraryLoading}
-              openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
-            />
-          </TabsContent>
-        </Tabs>
-
-        <ExportBar
-          bookLoaded={bookLoaded} processing={processing} files={files}
-          showExport={showExport} exportPct={exportPct} exportMsg={exportMsg}
-          saving={saving} saveMsg={saveMsg}
-          handleExportXtc={() => handleExportXtc()} handleExportAll={handleExportAll}
-          handleSaveToLibrary={handleSaveToLibrary} handleSaveAllToLibrary={handleSaveAllToLibrary}
-        />
-      </div>
+      <Sidebar
+        files={files} fileIdx={fileIdx} fileInputRef={fileInputRef}
+        addFiles={addFiles} switchToFile={switchToFile} removeFile={removeFile}
+        dragOver={dragOver} setDragOver={setDragOver}
+        setFiles={setFiles} filesRef={filesRef} setBookLoaded={setBookLoaded}
+        s={s} meta={meta} toc={toc} customFontName={customFontName}
+        update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
+        flushReformat={flushReformat} flushRender={flushRender}
+        handleFontChange={handleFontChange} handleQualityChange={handleQualityChange}
+        handleHyphenationChange={handleHyphenationChange} handleHyphenLangChange={handleHyphenLangChange}
+        handleCustomFont={handleCustomFont} fontInputRef={fontInputRef}
+        renderPreview={renderPreview} rendererRef={rendererRef}
+        calibreConnected={calibreConnected} opdsFeed={opdsFeed}
+        opdsLoading={opdsLoading} opdsError={opdsError}
+        opdsSearch={opdsSearch} opdsNavStack={opdsNavStack}
+        opdsDownloading={opdsDownloading}
+        setOpdsSettingsOpen={setOpdsSettingsOpen} setOpdsSearch={setOpdsSearch}
+        setOpdsError={setOpdsError}
+        opdsBrowse={opdsBrowse} opdsBack={opdsBack}
+        opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
+        libraryBooks={libraryBooks} libraryLoading={libraryLoading}
+        openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
+        fetchLibraryBooks={fetchLibraryBooks}
+        bookLoaded={bookLoaded} processing={processing}
+        showExport={showExport} exportPct={exportPct} exportMsg={exportMsg}
+        saving={saving} saveMsg={saveMsg}
+        handleExportXtc={() => handleExportXtc()} handleExportAll={handleExportAll}
+        handleSaveToLibrary={handleSaveToLibrary} handleSaveAllToLibrary={handleSaveAllToLibrary}
+      />
 
       {/* Content area */}
       <div className="flex-1 flex flex-col min-w-0">
