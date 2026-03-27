@@ -1,3 +1,5 @@
+import { XMLParser } from "fast-xml-parser"
+
 // ── Types ────────────────────────────────────────────────────────────
 
 export interface OpdsServer {
@@ -29,9 +31,17 @@ export interface OpdsFeed {
 
 // ── Constants ────────────────────────────────────────────────────────
 
-const ATOM_NS = "http://www.w3.org/2005/Atom"
-
 const STORAGE_KEY = "xtc-opds-server"
+
+// fast-xml-parser configured to preserve attributes and handle namespaces
+const xmlParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  removeNSPrefix: true,       // Strip namespace prefixes (atom:title → title)
+  isArray: (name) => {        // Always treat these as arrays even if single element
+    return ["entry", "link", "author"].includes(name)
+  },
+})
 
 // ── Storage ──────────────────────────────────────────────────────────
 
@@ -124,106 +134,90 @@ export async function downloadEpub(
 
 // ── XML Parsing ──────────────────────────────────────────────────────
 
-function getElements(parent: Element, tagName: string): Element[] {
-  const nsEls = parent.getElementsByTagNameNS(ATOM_NS, tagName)
-  const plainEls = parent.getElementsByTagName(tagName)
-  const els = nsEls.length > 0 ? nsEls : plainEls
-  return Array.from(els)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type XmlNode = any
+
+function resolveUrl(href: string, baseUrl: string): string {
+  if (!href) return ""
+  return href.startsWith("http") ? href : new URL(href, baseUrl).href
+}
+
+function textOf(node: XmlNode): string {
+  if (node == null) return ""
+  if (typeof node === "string") return node.trim()
+  if (typeof node === "number") return String(node)
+  // fast-xml-parser may put text in #text for mixed content
+  if (node["#text"] != null) return String(node["#text"]).trim()
+  return ""
 }
 
 function parseFeed(xml: string, baseUrl: string): OpdsFeed {
-  const doc = new DOMParser().parseFromString(xml, "application/xml")
+  const doc = xmlParser.parse(xml)
 
-  const parseError = doc.querySelector("parsererror")
-  if (parseError) {
-    throw new Error("Invalid XML in OPDS feed")
-  }
+  // The root element is typically <feed> (with or without namespace prefix)
+  const feed = doc.feed ?? doc
 
-  const feed = doc.documentElement
+  const title = textOf(feed.title) || "Library"
 
-  // Feed title
-  const titleEl = feed.getElementsByTagNameNS(ATOM_NS, "title")[0]
-    ?? feed.getElementsByTagName("title")[0]
-  const title = titleEl?.textContent ?? "Library"
+  // Links (always an array thanks to isArray config)
+  const links: XmlNode[] = feed.link ?? []
 
-  // Links
-  const allLinks = getElements(feed, "link")
-
-  // Search URL (OpenSearch)
   let searchUrl: string | null = null
-  for (const link of allLinks) {
-    if (link.getAttribute("rel") === "search") {
-      const href = link.getAttribute("href")
-      if (href) {
-        searchUrl = href.startsWith("http") ? href : new URL(href, baseUrl).href
-      }
-    }
-  }
-
-  // Next page URL (pagination)
   let nextUrl: string | null = null
-  for (const link of allLinks) {
-    if (link.getAttribute("rel") === "next") {
-      const href = link.getAttribute("href")
-      if (href) {
-        nextUrl = href.startsWith("http") ? href : new URL(href, baseUrl).href
-      }
+
+  for (const link of links) {
+    const rel = link["@_rel"] || ""
+    const href = link["@_href"] || ""
+    if (rel === "search" && href) {
+      searchUrl = resolveUrl(href, baseUrl)
+    } else if (rel === "next" && href) {
+      nextUrl = resolveUrl(href, baseUrl)
     }
   }
 
-  // Entries
-  const rawEntries = getElements(feed, "entry")
-  const entries: OpdsEntry[] = rawEntries.map(e => parseEntry(e, baseUrl))
+  // Entries (always an array thanks to isArray config)
+  const rawEntries: XmlNode[] = feed.entry ?? []
+  const entries = rawEntries.map((e: XmlNode) => parseEntry(e, baseUrl))
 
   return { title, entries, nextUrl, searchUrl }
 }
 
-function parseEntry(entry: Element, baseUrl: string): OpdsEntry {
-  const text = (tag: string) => {
-    const el = entry.getElementsByTagNameNS(ATOM_NS, tag)[0]
-      ?? entry.getElementsByTagName(tag)[0]
-    return el?.textContent?.trim() ?? ""
-  }
+function parseEntry(entry: XmlNode, baseUrl: string): OpdsEntry {
+  const id = textOf(entry.id)
+  const title = textOf(entry.title)
+  const updated = textOf(entry.updated)
+  const summary = textOf(entry.summary) || textOf(entry.content)
 
-  const id = text("id")
-  const title = text("title")
-  const updated = text("updated")
-  const summary = text("summary") || text("content")
+  // Authors (always an array thanks to isArray config)
+  const rawAuthors: XmlNode[] = entry.author ?? []
+  const authors = rawAuthors
+    .map((a: XmlNode) => textOf(a.name))
+    .filter((n: string) => n.length > 0)
 
-  // Authors
-  const rawAuthors = getElements(entry, "author")
-  const authors: string[] = []
-  for (const authorEl of rawAuthors) {
-    const nameEl = authorEl.getElementsByTagNameNS(ATOM_NS, "name")[0]
-      ?? authorEl.getElementsByTagName("name")[0]
-    if (nameEl?.textContent) authors.push(nameEl.textContent.trim())
-  }
-
-  // Links
-  const allLinks = getElements(entry, "link")
+  // Links (always an array)
+  const links: XmlNode[] = entry.link ?? []
 
   let coverUrl: string | null = null
   let thumbnailUrl: string | null = null
   const formats: { type: string; href: string }[] = []
   let navigationHref: string | null = null
 
-  for (const link of allLinks) {
-    const rel = link.getAttribute("rel") || ""
-    const href = link.getAttribute("href") || ""
-    const type = link.getAttribute("type") || ""
+  for (const link of links) {
+    const rel: string = link["@_rel"] || ""
+    const href: string = link["@_href"] || ""
+    const type: string = link["@_type"] || ""
 
     if (rel.includes("http://opds-spec.org/image/thumbnail")) {
-      thumbnailUrl = href.startsWith("http") ? href : new URL(href, baseUrl).href
+      thumbnailUrl = resolveUrl(href, baseUrl)
     } else if (rel.includes("http://opds-spec.org/image")) {
-      coverUrl = href.startsWith("http") ? href : new URL(href, baseUrl).href
+      coverUrl = resolveUrl(href, baseUrl)
     } else if (rel.includes("http://opds-spec.org/acquisition")) {
-      const absHref = href.startsWith("http") ? href : new URL(href, baseUrl).href
-      formats.push({ type, href: absHref })
+      formats.push({ type, href: resolveUrl(href, baseUrl) })
     } else if (
       rel === "subsection" ||
       (type.includes("application/atom+xml") && !rel.includes("acquisition"))
     ) {
-      navigationHref = href.startsWith("http") ? href : new URL(href, baseUrl).href
+      navigationHref = resolveUrl(href, baseUrl)
     }
   }
 
