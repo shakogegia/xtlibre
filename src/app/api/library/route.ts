@@ -2,7 +2,7 @@ import { NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import path from "path"
 import fs from "fs"
-import { insertBook, listBooks, getLibraryDir } from "@/lib/db"
+import { insertBook, listBooks, getLibraryDir, findByOriginalEpub, linkXtcToBook } from "@/lib/db"
 import { requireAuth } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
@@ -17,16 +17,34 @@ export async function POST(request: NextRequest) {
     const deviceType = formData.get("device_type") as string | null
     const originalEpubName = formData.get("original_epub_name") as string | null
     const coverFile = formData.get("cover") as File | null
+    const epubBookId = formData.get("epub_book_id") as string | null
 
     if (!file || !title) {
       return Response.json({ error: "file and title are required" }, { status: 400 })
     }
 
-    const id = randomUUID()
+    const arrayBuffer = await file.arrayBuffer()
+
+    // Check if we should link to an existing EPUB row
+    let id = epubBookId ?? undefined
+    if (!id && originalEpubName) {
+      const existing = findByOriginalEpub(originalEpubName, arrayBuffer.byteLength)
+      if (existing) id = existing.id
+    }
+
+    if (id) {
+      // Link XTC to existing book row
+      const filename = `${id}.xtc`
+      const filePath = path.join(getLibraryDir(), filename)
+      fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
+      linkXtcToBook(id, filename, deviceType)
+      return Response.json({ id, title, author })
+    }
+
+    // No existing row — create new (legacy path)
+    id = randomUUID()
     const filename = `${id}.xtc`
     const filePath = path.join(getLibraryDir(), filename)
-
-    const arrayBuffer = await file.arrayBuffer()
     fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
 
     let coverBuffer: Buffer | null = null

@@ -12,8 +12,8 @@ export async function GET(
 
   const { id } = await params
   const book = getBook(id)
-  if (!book) {
-    return Response.json({ error: "Not found" }, { status: 404 })
+  if (!book || !book.filename) {
+    return Response.json({ error: "XTC not found" }, { status: 404 })
   }
 
   const filePath = path.join(getLibraryDir(), book.filename)
@@ -47,9 +47,16 @@ export async function DELETE(
     return Response.json({ error: "Not found" }, { status: 404 })
   }
 
-  const filePath = path.join(getLibraryDir(), book.filename)
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath)
+  // Delete XTC file if present
+  if (book.filename) {
+    const xtcPath = path.join(getLibraryDir(), book.filename)
+    if (fs.existsSync(xtcPath)) fs.unlinkSync(xtcPath)
+  }
+
+  // Delete EPUB file if present
+  if (book.epub_filename) {
+    const epubPath = path.join(getLibraryDir(), book.epub_filename)
+    if (fs.existsSync(epubPath)) fs.unlinkSync(epubPath)
   }
 
   deleteBook(id)
