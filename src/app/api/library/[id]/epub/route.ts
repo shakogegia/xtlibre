@@ -22,15 +22,15 @@ export async function GET(
   }
 
   const data = fs.readFileSync(filePath)
-  const safeName = (book.original_epub_name || book.title || "book")
-    .replace(/[^a-zA-Z0-9\u0080-\uFFFF._-]/g, "_")
-    .substring(0, 80)
-  const filename = safeName.endsWith(".epub") ? safeName : `${safeName}.epub`
+  const rawName = (book.original_epub_name || book.title || "book").substring(0, 80)
+  const asciiName = rawName.replace(/[^a-zA-Z0-9._-]/g, "_")
+  const filename = asciiName.endsWith(".epub") ? asciiName : `${asciiName}.epub`
+  const utf8Name = encodeURIComponent(rawName.endsWith(".epub") ? rawName : `${rawName}.epub`)
 
   return new Response(data, {
     headers: {
       "Content-Type": "application/epub+zip",
-      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Disposition": `attachment; filename="${filename}"; filename*=UTF-8''${utf8Name}`,
       "Content-Length": String(data.byteLength),
     },
   })

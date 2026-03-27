@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { Type, ALargeSmall } from "lucide-react"
 import { FONT_FAMILIES, type DeviceType } from "@/lib/config"
 import {
   type Settings, type BookMetadata, type TocItem, type Renderer,
@@ -23,7 +24,9 @@ interface OptionsTabProps {
   s: Settings
   meta: BookMetadata
   toc: TocItem[]
-  customFontName: string
+  customFonts: Array<{ id: string; name: string; filename: string }>
+  uploadCustomFont: (file: File) => Promise<{ id: string; name: string; filename: string }>
+  deleteCustomFont: (id: string) => Promise<void>
   update: (patch: Partial<Settings>) => void
   updateAndReformat: (patch: Partial<Settings>) => void
   updateAndRender: (patch: Partial<Settings>) => void
@@ -33,69 +36,27 @@ interface OptionsTabProps {
   handleQualityChange: (mode: "fast" | "hq") => void
   handleHyphenationChange: (val: number) => void
   handleHyphenLangChange: (lang: string | null) => void
-  handleCustomFont: (e: React.ChangeEvent<HTMLInputElement>) => void
-  fontInputRef: React.RefObject<HTMLInputElement | null>
   renderPreview: () => void
   rendererRef: React.MutableRefObject<Renderer>
 }
 
 export function OptionsTab({
-  s, meta, toc, customFontName,
+  s, meta, toc,
+  customFonts, uploadCustomFont, deleteCustomFont,
   update, updateAndReformat, updateAndRender,
   flushReformat, flushRender,
   handleFontChange, handleQualityChange,
   handleHyphenationChange, handleHyphenLangChange,
-  handleCustomFont, fontInputRef,
   renderPreview, rendererRef,
 }: OptionsTabProps) {
   return (
     <>
-      <Accordion multiple defaultValue={["device", "text"]} className="space-y-1">
-        {/* Device */}
-        <AccordionItem value="device" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
-          <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
-            <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
-              Device
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="pb-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-[11px] text-muted-foreground mb-1 block">Model</Label>
-                <Select value={s.deviceType} onValueChange={(v) => v && update({ deviceType: v as DeviceType })}>
-                  <SelectTrigger className="h-8 text-[12px]"><SelectValue>{deviceLabel[s.deviceType]}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="x4">X4 (480x800)</SelectItem>
-                      <SelectItem value="x3">X3 (528x792)</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-[11px] text-muted-foreground mb-1 block">Orientation</Label>
-                <Select value={String(s.orientation)} onValueChange={(v) => v && update({ orientation: Number(v) })}>
-                  <SelectTrigger className="h-8 text-[12px]"><SelectValue>{orientLabel[String(s.orientation)]}</SelectValue></SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      <SelectItem value="0">Portrait 0&deg;</SelectItem>
-                      <SelectItem value="90">Landscape 90&deg;</SelectItem>
-                      <SelectItem value="180">Portrait 180&deg;</SelectItem>
-                      <SelectItem value="270">Landscape 270&deg;</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </AccordionContent>
-        </AccordionItem>
-
+      <Accordion multiple defaultValue={["text"]} className="space-y-1">
         {/* Text Settings */}
         <AccordionItem value="text" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
           <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
             <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              <ALargeSmall className="size-3.5 text-muted-foreground" />
               Typography
             </span>
           </AccordionTrigger>
@@ -111,7 +72,9 @@ export function OptionsTab({
                       {Object.keys(FONT_FAMILIES).map(f => (
                         <SelectItem key={f} value={f}>{f}</SelectItem>
                       ))}
-                      {customFontName && <SelectItem value={customFontName}>{customFontName} (custom)</SelectItem>}
+                      {customFonts.map(f => (
+                        <SelectItem key={f.id} value={f.name}>{f.name}</SelectItem>
+                      ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
@@ -234,14 +197,100 @@ export function OptionsTab({
                 onCheckedChange={(v) => updateAndReformat({ ignoreDocMargins: !!v })} />
               <Label htmlFor="ignoreDocMargins" className="text-[12px]">Ignore document margins</Label>
             </div>
+          </AccordionContent>
+        </AccordionItem>
 
-            <div>
-              <input ref={fontInputRef} type="file" accept=".ttf,.otf" className="hidden" onChange={handleCustomFont} />
-              <Button variant="outline" size="sm" className="w-full h-7 text-[12px]" onClick={() => fontInputRef.current?.click()}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                Upload Custom Font
-              </Button>
-              {customFontName && <p className="text-[11px] text-muted-foreground mt-1">Loaded: {customFontName}</p>}
+        {/* Custom Fonts */}
+        <AccordionItem value="fonts" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
+          <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
+            <span className="flex items-center gap-2">
+              <Type className="size-3.5 text-muted-foreground" />
+              Custom Fonts
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-3 space-y-2">
+            {customFonts.length > 0 && (
+              <div className="space-y-1">
+                {customFonts.map(f => (
+                  <div key={f.id} className="flex items-center justify-between py-1 px-2 rounded bg-muted/30">
+                    <span className="text-[12px] truncate">{f.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteCustomFont(f.id)}
+                      title="Remove font"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-[12px]"
+              onClick={() => {
+                const input = document.createElement("input")
+                input.type = "file"
+                input.accept = ".ttf,.otf"
+                input.onchange = async () => {
+                  const file = input.files?.[0]
+                  if (file) {
+                    try {
+                      await uploadCustomFont(file)
+                    } catch {}
+                  }
+                }
+                input.click()
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload Font
+            </Button>
+            {customFonts.length === 0 && (
+              <p className="text-[11px] text-muted-foreground text-center">Upload .ttf or .otf files to use as reading fonts</p>
+            )}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Device */}
+        <AccordionItem value="device" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
+          <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
+            <span className="flex items-center gap-2">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+              Device
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-3 space-y-2">
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">Model</Label>
+                <Select value={s.deviceType} onValueChange={(v) => v && update({ deviceType: v as DeviceType })}>
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue>{deviceLabel[s.deviceType]}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="x4">X4 (480x800)</SelectItem>
+                      <SelectItem value="x3">X3 (528x792)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-[11px] text-muted-foreground mb-1 block">Orientation</Label>
+                <Select value={String(s.orientation)} onValueChange={(v) => v && update({ orientation: Number(v) })}>
+                  <SelectTrigger className="h-8 text-[12px]"><SelectValue>{orientLabel[String(s.orientation)]}</SelectValue></SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      <SelectItem value="0">Portrait 0&deg;</SelectItem>
+                      <SelectItem value="90">Landscape 90&deg;</SelectItem>
+                      <SelectItem value="180">Portrait 180&deg;</SelectItem>
+                      <SelectItem value="270">Landscape 270&deg;</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </AccordionContent>
         </AccordionItem>

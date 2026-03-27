@@ -4,6 +4,7 @@ import path from "path"
 import fs from "fs"
 import { insertEpubBook, findByOriginalEpub, getLibraryDir } from "@/lib/db"
 import { requireAuth } from "@/lib/auth"
+import { extractCoverFromEpub } from "@/lib/epub-cover"
 
 export async function POST(request: NextRequest) {
   const denied = await requireAuth(request)
@@ -22,6 +23,7 @@ export async function POST(request: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer()
+    const epubBuffer = Buffer.from(arrayBuffer)
 
     // Dedup check: same original name + file size = same EPUB
     if (originalEpubName) {
@@ -35,10 +37,11 @@ export async function POST(request: NextRequest) {
     const epubFilename = `${id}.epub`
     const filePath = path.join(getLibraryDir(), epubFilename)
 
-    fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
+    fs.writeFileSync(filePath, epubBuffer)
 
-    let coverBuffer: Buffer | null = null
-    if (coverFile) {
+    // Extract cover from EPUB metadata; fall back to client-sent cover (e.g. Calibre thumbnail)
+    let coverBuffer = extractCoverFromEpub(epubBuffer)
+    if (!coverBuffer && coverFile) {
       const coverData = await coverFile.arrayBuffer()
       coverBuffer = Buffer.from(coverData)
     }

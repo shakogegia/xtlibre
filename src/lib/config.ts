@@ -28,13 +28,6 @@ export const FONT_FAMILIES: Record<string, { variants: { file: string; url: stri
       { file: "Merriweather-BoldItalic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/merriweather/Merriweather-BoldItalic.ttf" },
     ],
   },
-  "Open Sans": {
-    variants: [
-      { file: "OpenSans-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/opensans/OpenSans%5Bwdth%2Cwght%5D.ttf" },
-      { file: "OpenSans-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/opensans/OpenSans-Italic%5Bwdth%2Cwght%5D.ttf" },
-    ],
-    isVariable: true,
-  },
   "Source Serif 4": {
     variants: [
       { file: "SourceSerif4-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/sourceserif4/SourceSerif4%5Bopsz%2Cwght%5D.ttf" },
@@ -42,24 +35,10 @@ export const FONT_FAMILIES: Record<string, { variants: { file: string; url: stri
     ],
     isVariable: true,
   },
-  "Noto Sans": {
-    variants: [
-      { file: "NotoSans-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans%5Bwdth%2Cwght%5D.ttf" },
-      { file: "NotoSans-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosans/NotoSans-Italic%5Bwdth%2Cwght%5D.ttf" },
-    ],
-    isVariable: true,
-  },
   "Noto Serif": {
     variants: [
       { file: "NotoSerif-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notoserif/NotoSerif%5Bwdth%2Cwght%5D.ttf" },
       { file: "NotoSerif-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notoserif/NotoSerif-Italic%5Bwdth%2Cwght%5D.ttf" },
-    ],
-    isVariable: true,
-  },
-  Roboto: {
-    variants: [
-      { file: "Roboto-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/Roboto%5Bwdth%2Cwght%5D.ttf" },
-      { file: "Roboto-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/roboto/Roboto-Italic%5Bwdth%2Cwght%5D.ttf" },
     ],
     isVariable: true,
   },
@@ -77,11 +56,27 @@ export const FONT_FAMILIES: Record<string, { variants: { file: string; url: stri
     ],
     isVariable: true,
   },
-  "Noto Sans Georgian": {
+  Bitter: {
     variants: [
-      { file: "NotoSansGeorgian-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/notosansgeorgian/NotoSansGeorgian%5Bwdth%2Cwght%5D.ttf" },
+      { file: "Bitter-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bitter/Bitter%5Bwght%5D.ttf" },
+      { file: "Bitter-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/bitter/Bitter-Italic%5Bwght%5D.ttf" },
     ],
     isVariable: true,
+  },
+  Vollkorn: {
+    variants: [
+      { file: "Vollkorn-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/vollkorn/Vollkorn%5Bwght%5D.ttf" },
+      { file: "Vollkorn-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/vollkorn/Vollkorn-Italic%5Bwght%5D.ttf" },
+    ],
+    isVariable: true,
+  },
+  Spectral: {
+    variants: [
+      { file: "Spectral-Regular.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spectral/Spectral-Regular.ttf" },
+      { file: "Spectral-Bold.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spectral/Spectral-Bold.ttf" },
+      { file: "Spectral-Italic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spectral/Spectral-Italic.ttf" },
+      { file: "Spectral-BoldItalic.ttf", url: "https://cdn.jsdelivr.net/gh/google/fonts@main/ofl/spectral/Spectral-BoldItalic.ttf" },
+    ],
   },
 }
 

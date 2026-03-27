@@ -10,12 +10,13 @@ interface CalibreDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   calibreConnected: boolean
+  calibreConfig: { url: string; username: string } | null
   opdsSaveSettings: (config: { url: string; username: string; password: string }) => void
   opdsDisconnect: () => void
 }
 
 export function CalibreDialog({
-  open, onOpenChange, calibreConnected, opdsSaveSettings, opdsDisconnect,
+  open, onOpenChange, calibreConnected, calibreConfig, opdsSaveSettings, opdsDisconnect,
 }: CalibreDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -44,7 +45,7 @@ export function CalibreDialog({
             <Input
               name="url"
               placeholder="https://calibre.example.com"
-              defaultValue=""
+              defaultValue={calibreConfig?.url ?? ""}
               className="h-8 text-[12px]"
               required
             />
@@ -54,7 +55,7 @@ export function CalibreDialog({
             <Input
               name="username"
               placeholder="Optional"
-              defaultValue=""
+              defaultValue={calibreConfig?.username ?? ""}
               className="h-8 text-[12px]"
               autoComplete="username"
             />
@@ -74,9 +75,9 @@ export function CalibreDialog({
             {calibreConnected && (
               <Button
                 type="button"
-                variant="ghost"
+                variant="destructive"
                 size="sm"
-                className="h-7 text-[11px] text-destructive hover:text-destructive"
+                className="h-7 text-[11px]"
                 onClick={() => { opdsDisconnect(); onOpenChange(false) }}
               >
                 Disconnect
