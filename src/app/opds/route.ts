@@ -10,17 +10,23 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;")
 }
 
+function toRfc3339(sqliteDatetime: string): string {
+  // SQLite datetime('now') → "2026-03-27 15:30:00", needs "T" separator + "Z"
+  return sqliteDatetime.replace(" ", "T") + "Z"
+}
+
 function bookEntry(book: BookListItem, baseUrl: string): string {
-  const acqHref = `${baseUrl}/api/library/${book.id}`
+  const epubHref = `${baseUrl}/api/library/${book.id}/epub`
   const coverHref = `${baseUrl}/api/library/${book.id}/cover`
 
   return `
   <entry>
     <title>${escapeXml(book.title)}</title>
     <id>urn:uuid:${book.id}</id>
-    <updated>${book.created_at}Z</updated>
+    <updated>${toRfc3339(book.created_at)}</updated>
     ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
-    <link rel="http://opds-spec.org/acquisition" href="${acqHref}" type="application/octet-stream"/>
+    <content type="text">${escapeXml(book.title)}${book.author ? ` by ${escapeXml(book.author)}` : ""}</content>
+    <link rel="http://opds-spec.org/acquisition" href="${epubHref}" type="application/epub+zip"/>
     <link rel="http://opds-spec.org/image/thumbnail" href="${coverHref}" type="image/jpeg"/>
     ${book.device_type ? `<category term="${escapeXml(book.device_type)}" label="${escapeXml(book.device_type.toUpperCase())}"/>` : ""}
   </entry>`
@@ -32,8 +38,8 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
-  const books = listBooks().filter(b => b.filename)
-  const latestDate = books.length > 0 ? books[0].created_at + "Z" : new Date().toISOString()
+  const books = listBooks().filter(b => b.epub_filename)
+  const latestDate = books.length > 0 ? toRfc3339(books[0].created_at) : new Date().toISOString()
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom"

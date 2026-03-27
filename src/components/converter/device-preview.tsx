@@ -52,12 +52,15 @@ export function DevicePreview({
           </div>
           <p className="text-sm font-medium text-muted-foreground">Load an EPUB file to begin</p>
           <p className="text-[12px] text-muted-foreground/60 mt-1">Drag and drop or use the sidebar</p>
-          {!wasmReady && (
-            <div className="flex items-center justify-center gap-2 mt-3 text-[12px] text-muted-foreground/50">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-              Loading engine...
-            </div>
-          )}
+        </div>
+      )}
+
+      {!wasmReady && (
+        <div className="absolute inset-0 flex items-center justify-center bg-background/40 backdrop-blur-sm z-10">
+          <div className="flex items-center gap-2 text-[12px] text-muted-foreground/50">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            Loading engine...
+          </div>
         </div>
       )}
 
@@ -153,7 +156,7 @@ export function DevicePreview({
         </div>
 
         {/* Controls below device */}
-        <div className="flex flex-col gap-2 w-full px-1">
+        <div className="flex flex-col gap-4 w-full px-1">
           {/* Page scrubber */}
           {pages > 1 && (
             <div className="flex items-center gap-3">
@@ -181,7 +184,7 @@ export function DevicePreview({
             ) : (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             )}
-            Generate XTC
+            {s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
           </Button>
         </div>
       </div>

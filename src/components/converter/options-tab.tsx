@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
+import { Type, ALargeSmall } from "lucide-react"
 import { FONT_FAMILIES, type DeviceType } from "@/lib/config"
 import {
   type Settings, type BookMetadata, type TocItem, type Renderer,
@@ -51,66 +52,11 @@ export function OptionsTab({
   return (
     <>
       <Accordion multiple defaultValue={["text"]} className="space-y-1">
-        {/* Custom Fonts */}
-        <AccordionItem value="fonts" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
-          <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
-            <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>
-              Fonts
-            </span>
-          </AccordionTrigger>
-          <AccordionContent className="pb-3 space-y-2">
-            {customFonts.length > 0 && (
-              <div className="space-y-1">
-                {customFonts.map(f => (
-                  <div key={f.id} className="flex items-center justify-between py-1 px-2 rounded bg-muted/30">
-                    <span className="text-[12px] truncate">{f.name}</span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
-                      onClick={() => deleteCustomFont(f.id)}
-                      title="Remove font"
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full h-7 text-[12px]"
-              onClick={() => {
-                const input = document.createElement("input")
-                input.type = "file"
-                input.accept = ".ttf,.otf"
-                input.onchange = async () => {
-                  const file = input.files?.[0]
-                  if (file) {
-                    try {
-                      await uploadCustomFont(file)
-                    } catch {}
-                  }
-                }
-                input.click()
-              }}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Upload Font
-            </Button>
-            {customFonts.length === 0 && (
-              <p className="text-[11px] text-muted-foreground text-center">Upload .ttf or .otf files to use as reading fonts</p>
-            )}
-          </AccordionContent>
-        </AccordionItem>
-
         {/* Text Settings */}
         <AccordionItem value="text" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
           <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
             <span className="flex items-center gap-2">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+              <ALargeSmall className="size-3.5 text-muted-foreground" />
               Typography
             </span>
           </AccordionTrigger>
@@ -251,6 +197,61 @@ export function OptionsTab({
                 onCheckedChange={(v) => updateAndReformat({ ignoreDocMargins: !!v })} />
               <Label htmlFor="ignoreDocMargins" className="text-[12px]">Ignore document margins</Label>
             </div>
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* Custom Fonts */}
+        <AccordionItem value="fonts" className="border border-border/40 rounded-lg px-3 data-[state=open]:bg-muted/20">
+          <AccordionTrigger className="py-2.5 text-[12px] font-medium text-foreground hover:no-underline gap-2">
+            <span className="flex items-center gap-2">
+              <Type className="size-3.5 text-muted-foreground" />
+              Custom Fonts
+            </span>
+          </AccordionTrigger>
+          <AccordionContent className="pb-3 space-y-2">
+            {customFonts.length > 0 && (
+              <div className="space-y-1">
+                {customFonts.map(f => (
+                  <div key={f.id} className="flex items-center justify-between py-1 px-2 rounded bg-muted/30">
+                    <span className="text-[12px] truncate">{f.name}</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-5 w-5 p-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => deleteCustomFont(f.id)}
+                      title="Remove font"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-[12px]"
+              onClick={() => {
+                const input = document.createElement("input")
+                input.type = "file"
+                input.accept = ".ttf,.otf"
+                input.onchange = async () => {
+                  const file = input.files?.[0]
+                  if (file) {
+                    try {
+                      await uploadCustomFont(file)
+                    } catch {}
+                  }
+                }
+                input.click()
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload Font
+            </Button>
+            {customFonts.length === 0 && (
+              <p className="text-[11px] text-muted-foreground text-center">Upload .ttf or .otf files to use as reading fonts</p>
+            )}
           </AccordionContent>
         </AccordionItem>
 

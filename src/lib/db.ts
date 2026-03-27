@@ -24,7 +24,8 @@ db.exec(`
     file_size INTEGER,
     cover_thumbnail BLOB,
     created_at TEXT DEFAULT (datetime('now')),
-    device_type TEXT
+    device_type TEXT,
+    epub_filename TEXT
   )
 `)
 
@@ -55,12 +56,11 @@ db.exec(`
   )
 `)
 
-// Migration: add epub_filename column and make filename nullable
-const hasEpubFilename = db.prepare(
-  `SELECT COUNT(*) as cnt FROM pragma_table_info('books') WHERE name = 'epub_filename'`
-).get() as { cnt: number }
-if (hasEpubFilename.cnt === 0) {
+// Migration: add epub_filename column for pre-existing databases
+try {
   db.exec(`ALTER TABLE books ADD COLUMN epub_filename TEXT`)
+} catch {
+  // Column already exists (from CREATE TABLE or a previous migration)
 }
 
 export interface Book {

@@ -29,21 +29,27 @@ import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
 export function Converter({
-  initialTab, initialSettings, initialFonts,
+  initialTab, initialSettings, initialFonts, opdsUrl,
 }: {
-  initialTab: string; initialSettings: Settings; initialFonts: CustomFont[]
+  initialTab: string; initialSettings: Settings; initialFonts: CustomFont[]; opdsUrl: string | null
 }) {
   // Settings state (loaded server-side from DB, saved via server action on change)
   const [s, _setS] = useState<Settings>(initialSettings)
   const sRef = useRef<Settings>(initialSettings)
+  const didMount = useRef(false)
   const setS = useCallback((updater: Settings | ((prev: Settings) => Settings)) => {
     _setS(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater
       sRef.current = next
-      saveSettings(next)
       return next
     })
   }, [])
+
+  // Persist settings via server action outside render to avoid updating Router during render
+  useEffect(() => {
+    if (!didMount.current) { didMount.current = true; return }
+    saveSettings(s)
+  }, [s])
 
   const update = useCallback((patch: Partial<Settings>) => {
     setS(prev => ({ ...prev, ...patch }))
@@ -79,8 +85,8 @@ export function Converter({
   const [opdsDownloading, setOpdsDownloading] = useState<Set<string>>(new Set())
 
   // Custom fonts state
-  const [customFonts, setCustomFonts] = useState(initialFonts)
-  const customFontsRef = useRef(initialFonts)
+  const [customFonts, setCustomFonts] = useState(initialFonts ?? [])
+  const customFontsRef = useRef(initialFonts ?? [])
   useEffect(() => { customFontsRef.current = customFonts }, [customFonts])
 
   // Library state
@@ -329,19 +335,6 @@ export function Converter({
       formData.append("author", bookMeta.authors || "Unknown")
       formData.append("original_epub_name", file.name)
 
-      // Capture cover thumbnail from the canvas
-      const canvas = canvasRef.current
-      if (canvas) {
-        const scale = Math.min(200 / canvas.width, 300 / canvas.height)
-        const thumbCanvas = document.createElement("canvas")
-        thumbCanvas.width = Math.round(canvas.width * scale)
-        thumbCanvas.height = Math.round(canvas.height * scale)
-        const ctx = thumbCanvas.getContext("2d")!
-        ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
-        const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
-        if (blob) formData.append("cover", blob, "cover.jpg")
-      }
-
       const res = await fetch("/api/library/epub", { method: "POST", body: formData })
       if (!res.ok) throw new Error("EPUB upload failed")
       const data = await res.json()
@@ -401,6 +394,7 @@ export function Converter({
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const epubs = Array.from(newFiles).filter(f => f.name.toLowerCase().endsWith(".epub"))
     if (epubs.length === 0) return
+    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     const file = epubs[0]
     setFiles([{ file, name: file.name, loaded: false }])
     filesRef.current = [{ file, name: file.name, loaded: false }]
@@ -550,25 +544,26 @@ export function Converter({
   }, [])
 
   const openLibraryEpub = useCallback(async (bookId: string, title: string) => {
+    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     try {
       const res = await fetch(`/api/library/${bookId}/epub`)
-      if (!res.ok) throw new Error("Download failed")
+      if (!res.ok) {
+        const text = await res.text().catch(() => "")
+        throw new Error(`Download failed: ${res.status} ${text}`)
+      }
       const blob = await res.blob()
       const file = new File([blob], `${title}.epub`, { type: "application/epub+zip" })
-      addFiles([file])
-      // Set the library book ID so XTC export links correctly
-      setTimeout(() => {
-        setFiles(prev => prev.map(f =>
-          f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
-        ))
-        filesRef.current = filesRef.current.map(f =>
-          f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
-        )
-      }, 100)
+      // Set libraryBookId before loading so loadEpub skips auto-save
+      const fileInfo = { file, name: file.name, loaded: false, libraryBookId: bookId }
+      setFiles([fileInfo])
+      filesRef.current = [fileInfo]
+      setFileIdx(0)
+      fileIdxRef.current = 0
+      loadEpub(file)
     } catch (err) {
       console.error("Failed to open library EPUB:", err)
     }
-  }, [addFiles])
+  }, [loadEpub])
 
   const deleteLibraryBook = useCallback(async (bookId: string) => {
     try {
@@ -594,19 +589,6 @@ export function Converter({
     const currentFile = filesRef.current[fileIdxRef.current]
     if (currentFile?.libraryBookId) {
       formData.append("epub_book_id", currentFile.libraryBookId)
-    }
-
-    // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
-    const canvas = canvasRef.current
-    if (canvas) {
-      const scale = Math.min(200 / canvas.width, 300 / canvas.height)
-      const thumbCanvas = document.createElement("canvas")
-      thumbCanvas.width = Math.round(canvas.width * scale)
-      thumbCanvas.height = Math.round(canvas.height * scale)
-      const ctx = thumbCanvas.getContext("2d")!
-      ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
-      const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
-      if (blob) formData.append("cover", blob, "cover.jpg")
     }
 
     const res = await fetch("/api/library", { method: "POST", body: formData })
@@ -932,6 +914,7 @@ export function Converter({
     <div className="flex h-screen bg-background">
       <Sidebar
         initialTab={initialTab}
+        opdsUrl={opdsUrl}
         fileInputRef={fileInputRef}
         addFiles={addFiles} dragOver={dragOver} setDragOver={setDragOver}
         s={s} meta={meta} toc={toc}

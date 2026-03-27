@@ -10,6 +10,7 @@ import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 
 interface SidebarProps {
   initialTab: string
+  opdsUrl: string | null
 
   // Files (upload)
   fileInputRef: React.RefObject<HTMLInputElement | null>
@@ -65,7 +66,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
-  initialTab,
+  initialTab, opdsUrl,
   // Files
   fileInputRef, addFiles, dragOver, setDragOver,
   // Options tab
@@ -96,7 +97,7 @@ export function Sidebar({
           <LibraryTab
             fileInputRef={fileInputRef} addFiles={addFiles}
             dragOver={dragOver} setDragOver={setDragOver}
-            activeBookId={activeBookId}
+            opdsUrl={opdsUrl} activeBookId={activeBookId}
             libraryBooks={libraryBooks} libraryLoading={libraryLoading}
             openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
             deleteLibraryBook={deleteLibraryBook}

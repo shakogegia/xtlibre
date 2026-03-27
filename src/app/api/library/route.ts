@@ -16,7 +16,6 @@ export async function POST(request: NextRequest) {
     const author = formData.get("author") as string | null
     const deviceType = formData.get("device_type") as string | null
     const originalEpubName = formData.get("original_epub_name") as string | null
-    const coverFile = formData.get("cover") as File | null
     const epubBookId = formData.get("epub_book_id") as string | null
 
     if (!file || !title) {
@@ -34,7 +33,8 @@ export async function POST(request: NextRequest) {
 
     if (id) {
       // Link XTC to existing book row
-      const filename = `${id}.xtc`
+      const ext = file.name.endsWith(".xtch") ? ".xtch" : ".xtc"
+      const filename = `${id}${ext}`
       const filePath = path.join(getLibraryDir(), filename)
       fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
       linkXtcToBook(id, filename, deviceType)
@@ -43,15 +43,10 @@ export async function POST(request: NextRequest) {
 
     // No existing row — create new (legacy path)
     id = randomUUID()
-    const filename = `${id}.xtc`
+    const ext = file.name.endsWith(".xtch") ? ".xtch" : ".xtc"
+    const filename = `${id}${ext}`
     const filePath = path.join(getLibraryDir(), filename)
     fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
-
-    let coverBuffer: Buffer | null = null
-    if (coverFile) {
-      const coverData = await coverFile.arrayBuffer()
-      coverBuffer = Buffer.from(coverData)
-    }
 
     insertBook({
       id,
@@ -60,7 +55,7 @@ export async function POST(request: NextRequest) {
       filename,
       original_epub_name: originalEpubName,
       file_size: arrayBuffer.byteLength,
-      cover_thumbnail: coverBuffer,
+      cover_thumbnail: null,
       device_type: deviceType,
     })
 

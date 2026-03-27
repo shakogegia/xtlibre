@@ -13,5 +13,6 @@ export default async function Page({
   const initialTab = typeof tab === "string" && VALID_TABS.has(tab) ? tab : "library"
   const initialSettings = getSettings() ?? DEFAULT_SETTINGS
   const initialFonts = listFonts()
-  return <Converter initialTab={initialTab} initialSettings={initialSettings} initialFonts={initialFonts} />
+  const opdsUrl = process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL.replace(/\/+$/, "")}/opds` : null
+  return <Converter initialTab={initialTab} initialSettings={initialSettings} initialFonts={initialFonts} opdsUrl={opdsUrl} />
 }

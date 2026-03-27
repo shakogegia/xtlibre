@@ -1,6 +1,8 @@
-import React from "react"
+import React, { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Spinner } from "@/components/ui/spinner"
 import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 
 interface CalibreTabProps {
@@ -14,10 +16,36 @@ interface CalibreTabProps {
   setOpdsSettingsOpen: (v: boolean) => void
   setOpdsSearch: (v: string) => void
   setOpdsError: (v: string) => void
-  opdsBrowse: (path?: string) => void
+  opdsBrowse: (path?: string, append?: boolean) => void
   opdsBack: () => void
   opdsDoSearch: () => void
   opdsImportBook: (entry: OpdsEntry) => void
+}
+
+function Thumbnail({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+
+  if (error) return null
+
+  return (
+    <div className="relative w-8 h-11 rounded-sm bg-muted shrink-0 overflow-hidden">
+      {!loaded && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Spinner className="size-3" />
+        </div>
+      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={src}
+        alt=""
+        className={`w-full h-full object-cover transition-opacity ${loaded ? "opacity-100" : "opacity-0"}`}
+        loading="lazy"
+        onLoad={() => setLoaded(true)}
+        onError={() => setError(true)}
+      />
+    </div>
+  )
 }
 
 export function CalibreTab({
@@ -36,6 +64,14 @@ export function CalibreTab({
   opdsDoSearch,
   opdsImportBook,
 }: CalibreTabProps) {
+  // Auto-browse once connected with no feed yet
+  // (covers direct navigation to ?tab=calibre and page refresh)
+  useEffect(() => {
+    if (calibreConnected && !opdsFeed && !opdsLoading && !opdsError) {
+      opdsBrowse()
+    }
+  }, [calibreConnected]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <>
       {/* Header with settings gear */}
@@ -104,15 +140,26 @@ export function CalibreTab({
             </div>
           )}
 
-          {/* Loading */}
-          {opdsLoading && (
-            <div className="flex items-center justify-center py-8">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin text-muted-foreground"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          {/* Loading skeletons (only when no feed yet) */}
+          {opdsLoading && !opdsFeed && (
+            <div className="space-y-0">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-start gap-2.5 py-2 border-b border-border/30 last:border-0">
+                  <Skeleton className="w-8 h-11 rounded-sm shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <Skeleton className="h-3.5 w-3/4" />
+                    <Skeleton className="h-3 w-1/2" />
+                    <div className="flex gap-1">
+                      <Skeleton className="h-4 w-10 rounded" />
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
           {/* Book list */}
-          {!opdsLoading && opdsFeed && (
+          {opdsFeed && (
             <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
               {opdsFeed.entries.length === 0 && (
                 <p className="text-[11px] text-muted-foreground text-center py-4">No results</p>
@@ -128,17 +175,14 @@ export function CalibreTab({
                     }`}
                     onClick={isNav ? () => { if (entry.navigationPath) opdsBrowse(entry.navigationPath) } : undefined}
                   >
-                    {/* Thumbnail */}
-                    {entry.thumbnailPath && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={`/api/calibre/download?path=${encodeURIComponent(entry.thumbnailPath)}`}
-                        alt=""
-                        className="w-8 h-11 rounded-sm object-cover bg-muted shrink-0"
-                        loading="lazy"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
-                      />
-                    )}
+                    {/* Thumbnail (books only, not nav categories) */}
+                    {!isNav && (entry.thumbnailPath ? (
+                      <Thumbnail src={`/api/calibre/download?path=${encodeURIComponent(entry.thumbnailPath)}`} />
+                    ) : (
+                      <div className="w-8 h-11 rounded-sm bg-muted shrink-0 flex items-center justify-center">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground/40"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+                      </div>
+                    ))}
 
                     <div className="flex-1 min-w-0">
                       <div className="text-[12px] font-medium truncate">{entry.title}</div>
@@ -206,10 +250,10 @@ export function CalibreTab({
                     variant="ghost"
                     size="sm"
                     className="h-6 text-[11px] text-muted-foreground"
-                    onClick={() => opdsBrowse(opdsFeed.nextPath!)}
+                    onClick={() => opdsBrowse(opdsFeed.nextPath!, true)}
                     disabled={opdsLoading}
                   >
-                    Load more...
+                    {opdsLoading ? "Loading..." : "Load more..."}
                   </Button>
                 </div>
               )}

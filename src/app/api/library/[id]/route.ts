@@ -22,13 +22,14 @@ export async function GET(
   }
 
   const data = fs.readFileSync(filePath)
-  const safeName = book.title.replace(/[^a-zA-Z0-9\u0080-\uFFFF._-]/g, "_").substring(0, 50)
+  const asciiName = book.title.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 50)
   const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
+  const utf8Name = encodeURIComponent(book.title.substring(0, 50)) + ext
 
   return new Response(data, {
     headers: {
       "Content-Type": "application/octet-stream",
-      "Content-Disposition": `attachment; filename="${safeName}${ext}"`,
+      "Content-Disposition": `attachment; filename="${asciiName}${ext}"; filename*=UTF-8''${utf8Name}`,
       "Content-Length": String(data.byteLength),
     },
   })

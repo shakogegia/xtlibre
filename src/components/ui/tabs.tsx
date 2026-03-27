@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -34,6 +34,20 @@ function Tabs({
   const activeValue = urlSync
     ? (isControlled ? valueProp : (urlValue ?? defaultValue))
     : (valueProp ?? undefined)
+
+  // When urlSync is active and no param exists yet, write the default to the URL
+  // so the tab state and URL stay in sync from the start.
+  useEffect(() => {
+    if (urlSync && defaultValue !== undefined) {
+      const param = new URLSearchParams(window.location.search).get(urlSync)
+      if (param === null) {
+        setUrlValue(defaultValue)
+        const url = new URL(window.location.href)
+        url.searchParams.set(urlSync, String(defaultValue))
+        window.history.replaceState({}, "", url.toString())
+      }
+    }
+  }, [urlSync, defaultValue])
 
   const handleValueChange = useCallback(
     (newValue: TabsPrimitive.Root.Props["value"], details: TabsPrimitive.Root.ChangeEventDetails) => {
