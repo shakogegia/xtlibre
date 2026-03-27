@@ -46,6 +46,15 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS fonts (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
 // Migration: add epub_filename column and make filename nullable
 const hasEpubFilename = db.prepare(
   `SELECT COUNT(*) as cnt FROM pragma_table_info('books') WHERE name = 'epub_filename'`
@@ -213,4 +222,43 @@ export function getSettings(): Settings | null {
 export function setSettings(data: Settings): void {
   settingsSchema.parse(data)
   settingsStmts.upsert.run({ data: JSON.stringify(data) })
+}
+
+export interface CustomFont {
+  id: string
+  name: string
+  filename: string
+  created_at: string
+}
+
+const fontStmts = {
+  list: db.prepare(`SELECT id, name, filename, created_at FROM fonts ORDER BY name`),
+  getById: db.prepare(`SELECT * FROM fonts WHERE id = ?`),
+  insert: db.prepare(`
+    INSERT INTO fonts (id, name, filename, created_at)
+    VALUES (@id, @name, @filename, datetime('now'))
+  `),
+  deleteById: db.prepare(`DELETE FROM fonts WHERE id = ?`),
+}
+
+export function listFonts(): CustomFont[] {
+  return fontStmts.list.all() as CustomFont[]
+}
+
+export function getFont(id: string): CustomFont | undefined {
+  return fontStmts.getById.get(id) as CustomFont | undefined
+}
+
+export function insertFont(font: { id: string; name: string; filename: string }) {
+  fontStmts.insert.run(font)
+}
+
+export function deleteFont(id: string): boolean {
+  return fontStmts.deleteById.run(id).changes > 0
+}
+
+export function getFontsDir(): string {
+  const dir = path.join(DATA_DIR, "fonts")
+  fs.mkdirSync(dir, { recursive: true })
+  return dir
 }
