@@ -2,6 +2,9 @@
 
 EPUB-to-XTC converter for [Xteink](https://xteink.com) e-readers. Renders EPUBs in the browser via CREngine (WASM), previews them on a realistic device frame, and exports `.xtc` files ready to transfer to your device.
 
+<img width="1418" height="959" alt="Xnip2026-03-27_22-32-46" src="https://github.com/user-attachments/assets/ca2cee9f-2074-4068-a2d5-59fd6f19b833" />
+
+
 ## Features
 
 - **Device preview** — realistic on-screen frames for Xteink X4 (480×800) and X3 (528×792)
