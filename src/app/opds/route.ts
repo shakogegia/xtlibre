@@ -27,7 +27,7 @@ function bookEntry(book: BookListItem, baseUrl: string, token: string): string {
     <updated>${toRfc3339(book.created_at)}</updated>
     ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
     <content type="text">${escapeXml(book.title)}${book.author ? ` by ${escapeXml(book.author)}` : ""}</content>
-    <link rel="http://opds-spec.org/acquisition/open-access" href="${xtcHref}" type="application/epub+zip" title="${escapeXml(ext.slice(1).toUpperCase())}"/>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="${xtcHref}" type="application/x-xtc+zip" title="${escapeXml(ext.slice(1).toUpperCase())}"/>
     <link rel="http://opds-spec.org/image/thumbnail" href="${coverHref}" type="image/jpeg"/>
     ${book.device_type ? `<category term="${escapeXml(book.device_type)}" label="${escapeXml(book.device_type.toUpperCase())}"/>` : ""}
   </entry>`
