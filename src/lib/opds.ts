@@ -2,205 +2,181 @@ import { XMLParser } from "fast-xml-parser"
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface OpdsServer {
-  url: string       // Base URL, e.g. "https://books.example.com"
-  username: string
-  password: string
-}
-
 export interface OpdsEntry {
   id: string
   title: string
   authors: string[]
   summary: string
   updated: string
-  coverUrl: string | null
-  thumbnailUrl: string | null
-  formats: { type: string; href: string }[]  // All acquisition links
+  coverPath: string | null       // was coverUrl — now a relative path
+  thumbnailPath: string | null   // was thumbnailUrl — now a relative path
+  formats: { type: string; path: string }[]  // href → path
   hasEpub: boolean
-  epubHref: string | null  // Direct link to EPUB download
-  navigationHref: string | null  // For catalog navigation (categories, shelves)
+  epubPath: string | null        // was epubHref — now a relative path
+  navigationPath: string | null  // was navigationHref — now a relative path
 }
 
 export interface OpdsFeed {
   title: string
   entries: OpdsEntry[]
-  nextUrl: string | null  // Pagination
-  searchUrl: string | null  // OpenSearch template URL
+  nextPath: string | null    // was nextUrl — now a relative path
+  searchPath: string | null  // was searchUrl — now a relative path
 }
 
-// ── Constants ────────────────────────────────────────────────────────
+export interface CalibreConfigPublic {
+  url: string
+  username: string
+}
 
-const STORAGE_KEY = "xtc-opds-server"
+// ── XML Parser ──────────────────────────────────────────────────────
 
-// fast-xml-parser configured to preserve attributes and handle namespaces
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
-  removeNSPrefix: true,       // Strip namespace prefixes (atom:title → title)
-  isArray: (name) => {        // Always treat these as arrays even if single element
+  removeNSPrefix: true,
+  isArray: (name) => {
     return ["entry", "link", "author"].includes(name)
   },
 })
 
-// ── Storage ──────────────────────────────────────────────────────────
+// ── Calibre Config API ──────────────────────────────────────────────
 
-export function loadServer(): OpdsServer | null {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return null
-    return JSON.parse(raw) as OpdsServer
-  } catch {
-    return null
+export async function fetchCalibreConfig(): Promise<CalibreConfigPublic | null> {
+  const resp = await fetch("/api/calibre/config")
+  if (!resp.ok) return null
+  return resp.json()
+}
+
+export async function saveCalibreConfig(config: {
+  url: string
+  username: string
+  password: string
+}): Promise<CalibreConfigPublic> {
+  const resp = await fetch("/api/calibre/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  })
+  if (!resp.ok) {
+    const body = await resp.json().catch(() => ({ error: "Save failed" }))
+    throw new Error(body.error || "Save failed")
   }
+  return resp.json()
 }
 
-export function saveServer(server: OpdsServer) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(server))
+export async function deleteCalibreConfig(): Promise<void> {
+  await fetch("/api/calibre/config", { method: "DELETE" })
 }
 
-export function clearServer() {
-  localStorage.removeItem(STORAGE_KEY)
-}
+// ── Feed Fetching ───────────────────────────────────────────────────
 
-// ── Fetching (via proxy) ─────────────────────────────────────────────
-
-function makeAuthHeader(server: OpdsServer): string | null {
-  if (!server.username) return null
-  return "Basic " + btoa(`${server.username}:${server.password}`)
-}
-
-export async function fetchFeed(
-  feedUrl: string,
-  server: OpdsServer
-): Promise<OpdsFeed> {
-  // Resolve relative URLs against the server base
-  const absoluteUrl = feedUrl.startsWith("http")
-    ? feedUrl
-    : new URL(feedUrl, server.url).href
-
-  const proxyUrl = `/api/opds?url=${encodeURIComponent(absoluteUrl)}`
-  const headers: HeadersInit = {}
-  const auth = makeAuthHeader(server)
-  if (auth) headers["Authorization"] = auth
-
-  const resp = await fetch(proxyUrl, { headers })
+export async function fetchFeed(path?: string): Promise<OpdsFeed> {
+  const params = path ? `?path=${encodeURIComponent(path)}` : ""
+  const resp = await fetch(`/api/calibre/feed${params}`)
   if (!resp.ok) {
     const body = await resp.text()
-    throw new Error(`OPDS fetch failed (${resp.status}): ${body}`)
+    throw new Error(`Feed fetch failed (${resp.status}): ${body}`)
   }
-
   const xml = await resp.text()
-  return parseFeed(xml, server.url)
+  return parseFeed(xml)
 }
 
-export async function downloadEpub(
-  href: string,
-  server: OpdsServer
-): Promise<File> {
-  const absoluteUrl = href.startsWith("http")
-    ? href
-    : new URL(href, server.url).href
-
-  const proxyUrl = `/api/opds?url=${encodeURIComponent(absoluteUrl)}`
-  const headers: HeadersInit = {}
-  const auth = makeAuthHeader(server)
-  if (auth) headers["Authorization"] = auth
-
-  const resp = await fetch(proxyUrl, { headers })
+export async function downloadEpub(path: string): Promise<File> {
+  const resp = await fetch(`/api/calibre/download?path=${encodeURIComponent(path)}`)
   if (!resp.ok) {
     throw new Error(`Download failed (${resp.status})`)
   }
 
   const blob = await resp.blob()
 
-  // Extract filename from Content-Disposition or URL
+  // Extract filename from Content-Disposition or path
   const disposition = resp.headers.get("content-disposition")
   let filename = "book.epub"
   if (disposition) {
     const match = disposition.match(/filename[*]?=(?:UTF-8''|"?)([^";]+)/i)
     if (match) filename = decodeURIComponent(match[1].replace(/"/g, ""))
   } else {
-    const urlPath = new URL(absoluteUrl).pathname
-    const last = urlPath.split("/").pop()
+    const last = path.split("/").pop()
     if (last && last.includes(".")) filename = decodeURIComponent(last)
   }
 
-  // Ensure .epub extension
   if (!filename.toLowerCase().endsWith(".epub")) filename += ".epub"
 
   return new File([blob], filename, { type: "application/epub+zip" })
 }
 
-// ── XML Parsing ──────────────────────────────────────────────────────
+// ── XML Parsing ─────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type XmlNode = any
 
-function resolveUrl(href: string, baseUrl: string): string {
+/** Extract the path portion from a URL. Relative paths pass through as-is.
+ *  Absolute URLs (http://...) get their pathname + search extracted. */
+function extractPath(href: string): string {
   if (!href) return ""
-  return href.startsWith("http") ? href : new URL(href, baseUrl).href
+  if (href.startsWith("http")) {
+    try {
+      const u = new URL(href)
+      return u.pathname + u.search
+    } catch {
+      return href
+    }
+  }
+  return href
 }
 
 function textOf(node: XmlNode): string {
   if (node == null) return ""
   if (typeof node === "string") return node.trim()
   if (typeof node === "number") return String(node)
-  // fast-xml-parser may put text in #text for mixed content
   if (node["#text"] != null) return String(node["#text"]).trim()
   return ""
 }
 
-function parseFeed(xml: string, baseUrl: string): OpdsFeed {
+function parseFeed(xml: string): OpdsFeed {
   const doc = xmlParser.parse(xml)
-
-  // The root element is typically <feed> (with or without namespace prefix)
   const feed = doc.feed ?? doc
 
-  const title = textOf(feed.title) || "Library"
+  const title = textOf(feed.title) || "Calibre"
 
-  // Links (always an array thanks to isArray config)
   const links: XmlNode[] = feed.link ?? []
 
-  let searchUrl: string | null = null
-  let nextUrl: string | null = null
+  let searchPath: string | null = null
+  let nextPath: string | null = null
 
   for (const link of links) {
     const rel = link["@_rel"] || ""
     const href = link["@_href"] || ""
     if (rel === "search" && href) {
-      searchUrl = resolveUrl(href, baseUrl)
+      searchPath = extractPath(href)
     } else if (rel === "next" && href) {
-      nextUrl = resolveUrl(href, baseUrl)
+      nextPath = extractPath(href)
     }
   }
 
-  // Entries (always an array thanks to isArray config)
   const rawEntries: XmlNode[] = feed.entry ?? []
-  const entries = rawEntries.map((e: XmlNode) => parseEntry(e, baseUrl))
+  const entries = rawEntries.map((e: XmlNode) => parseEntry(e))
 
-  return { title, entries, nextUrl, searchUrl }
+  return { title, entries, nextPath, searchPath }
 }
 
-function parseEntry(entry: XmlNode, baseUrl: string): OpdsEntry {
+function parseEntry(entry: XmlNode): OpdsEntry {
   const id = textOf(entry.id)
   const title = textOf(entry.title)
   const updated = textOf(entry.updated)
   const summary = textOf(entry.summary) || textOf(entry.content)
 
-  // Authors (always an array thanks to isArray config)
   const rawAuthors: XmlNode[] = entry.author ?? []
   const authors = rawAuthors
     .map((a: XmlNode) => textOf(a.name))
     .filter((n: string) => n.length > 0)
 
-  // Links (always an array)
   const links: XmlNode[] = entry.link ?? []
 
-  let coverUrl: string | null = null
-  let thumbnailUrl: string | null = null
-  const formats: { type: string; href: string }[] = []
-  let navigationHref: string | null = null
+  let coverPath: string | null = null
+  let thumbnailPath: string | null = null
+  const formats: { type: string; path: string }[] = []
+  let navigationPath: string | null = null
 
   for (const link of links) {
     const rel: string = link["@_rel"] || ""
@@ -208,21 +184,21 @@ function parseEntry(entry: XmlNode, baseUrl: string): OpdsEntry {
     const type: string = link["@_type"] || ""
 
     if (rel.includes("http://opds-spec.org/image/thumbnail")) {
-      thumbnailUrl = resolveUrl(href, baseUrl)
+      thumbnailPath = extractPath(href)
     } else if (rel.includes("http://opds-spec.org/image")) {
-      coverUrl = resolveUrl(href, baseUrl)
+      coverPath = extractPath(href)
     } else if (rel.includes("http://opds-spec.org/acquisition")) {
-      formats.push({ type, href: resolveUrl(href, baseUrl) })
+      formats.push({ type, path: extractPath(href) })
     } else if (
       rel === "subsection" ||
       (type.includes("application/atom+xml") && !rel.includes("acquisition"))
     ) {
-      navigationHref = resolveUrl(href, baseUrl)
+      navigationPath = extractPath(href)
     }
   }
 
   const epubFormat = formats.find(
-    (f) => f.type === "application/epub+zip" || f.href.toLowerCase().includes("/epub/")
+    (f) => f.type === "application/epub+zip" || f.path.toLowerCase().includes("/epub/")
   )
 
   return {
@@ -231,11 +207,11 @@ function parseEntry(entry: XmlNode, baseUrl: string): OpdsEntry {
     authors,
     summary,
     updated,
-    coverUrl,
-    thumbnailUrl,
+    coverPath,
+    thumbnailPath,
     formats,
     hasEpub: !!epubFormat,
-    epubHref: epubFormat?.href ?? null,
-    navigationHref,
+    epubPath: epubFormat?.path ?? null,
+    navigationPath,
   }
 }
