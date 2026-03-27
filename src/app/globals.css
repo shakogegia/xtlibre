@@ -137,3 +137,8 @@
     scrollbar-color: oklch(0.6 0 0 / 30%) transparent;
   }
 }
+
+[data-sonner-toaster][data-y-position="top"] {
+  --offset-top: 62px !important;
+  --offset-right: 16px !important;
+}

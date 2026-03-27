@@ -5,14 +5,17 @@ EPUB-to-XTC converter for [Xteink](https://xteink.com) e-readers. Renders EPUBs 
 ## Features
 
 - **Device preview** — realistic on-screen frames for Xteink X4 (480×800) and X3 (528×792)
-- **Configurable rendering** — font family, size, line spacing, margins, and hyphenation
+- **Configurable rendering** — font family, size, weight, line spacing, margins, text alignment, and hyphenation
+- **Custom fonts** — upload TTF/OTF fonts for rendering
 - **Landscape mode** — rotate the preview for wide-format reading
-- **Floyd–Steinberg dithering** — converts pages to e-ink-optimized 16-level grayscale
+- **Floyd–Steinberg dithering** — 1-bit and 2-bit quantization modes for e-ink optimization
+- **Progress bar** — configurable progress bar with chapter marks, page info, and dither control
 - **Batch export** — export a single page or all pages at once as `.xtc`
 - **Page scrubber** — quickly jump through long books
-- **Persistent settings** — options are saved to `localStorage`
+- **Persistent settings** — options are saved server-side to SQLite
+- **Authentication** — login page with JWT session cookies; HTTP Basic Auth for OPDS
 - **Calibre-Web integration** — browse and download EPUBs from your [Calibre-Web](https://github.com/janeczku/calibre-web) or [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) library via OPDS
-- **Save to Library** — save converted XTC files to the server for later access
+- **Save to Library** — save converted XTC files and source EPUBs to the server for later access
 - **OPDS catalog** — your Xteink device can browse and download XTC files directly at `/opds`
 - **Docker support** — single-container deployment with persistent storage
 

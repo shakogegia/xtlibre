@@ -28,6 +28,7 @@ export function CalibreDialog({
           </DialogDescription>
         </DialogHeader>
         <form
+          key={calibreConfig?.url ?? ""}
           className="space-y-3 mt-2"
           onSubmit={(e) => {
             e.preventDefault()
