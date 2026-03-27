@@ -1,19 +1,6 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Button } from "@/components/ui/button"
-import {
-  Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue,
-} from "@/components/ui/select"
-import { Slider } from "@/components/ui/slider"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
-import {
-  Accordion, AccordionContent, AccordionItem, AccordionTrigger,
-} from "@/components/ui/accordion"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { ThemeToggle } from "@/components/theme-toggle"
-import { ChapterList } from "@/components/converter/chapter-list"
 import { FilesTab } from "@/components/converter/files-tab"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
@@ -22,26 +9,17 @@ import { LibraryTab } from "@/components/converter/library-tab"
 import { ExportBar } from "@/components/converter/export-bar"
 import { Toolbar } from "@/components/converter/toolbar"
 import { DevicePreview } from "@/components/converter/device-preview"
-import { Progress } from "@/components/ui/progress"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
-} from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import {
   FONT_FAMILIES, ARABIC_FONTS,
-  type DeviceType,
 } from "@/lib/config"
-import { DEVICE_BEZELS, DEVICE_COLORS, TRUE_LIFE_CSS_PPI, getScreenDimensions } from "@/lib/device"
+import { getScreenDimensions } from "@/lib/device"
 import {
   type WasmModule, type Renderer, type TocItem, type FileInfo, type BookMetadata,
   type Settings, type DeviceColor,
   DEFAULT_SETTINGS, PROGRESS_BAR_HEIGHT, PROGRESS_BAR_HEIGHT_FULLWIDTH,
   PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_SETTINGS, STORAGE_KEY_DEVICE_COLOR,
-  loadFromStorage, sv, deviceLabel, orientLabel, alignLabel, spacingLabel,
-  hyphLabel, langLabel, qualLabel,
+  loadFromStorage,
 } from "@/lib/types"
 import {
   type OpdsEntry, type OpdsFeed,
