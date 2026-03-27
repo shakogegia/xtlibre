@@ -23,7 +23,8 @@ import {
   fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
   fetchFeed, downloadEpub,
 } from "@/lib/opds"
-import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData, downloadFile } from "@/lib/image-processing"
+import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
+import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
 export function Converter({ initialTab, initialSettings }: { initialTab: string; initialSettings: Settings }) {
@@ -57,15 +58,13 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   const [processing, setProcessing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
-  const [exportPct, setExportPct] = useState(0)
-  const [exportMsg, setExportMsg] = useState<React.ReactNode>("")
-  const [showExport, setShowExport] = useState(false)
   const [dragOver, setDragOver] = useState(false)
 
   const [deviceColor, setDeviceColor] = useState<DeviceColor>("black")
 
   // OPDS state
   const [calibreConnected, setCalibreConnected] = useState(false)
+  const [calibreConfig, setCalibreConfig] = useState<{ url: string; username: string } | null>(null)
   const [opdsSettingsOpen, setOpdsSettingsOpen] = useState(false)
   const [opdsFeed, setOpdsFeed] = useState<OpdsFeed | null>(null)
   const [opdsLoading, setOpdsLoading] = useState(false)
@@ -86,7 +85,10 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     const savedColor = loadFromStorage<DeviceColor | null>(STORAGE_KEY_DEVICE_COLOR, null)
     if (savedColor) setDeviceColor(savedColor)
     fetchCalibreConfig().then(config => {
-      if (config) setCalibreConnected(true)
+      if (config) {
+        setCalibreConnected(true)
+        setCalibreConfig(config)
+      }
     })
   }, [])
 
@@ -381,24 +383,12 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const epubs = Array.from(newFiles).filter(f => f.name.toLowerCase().endsWith(".epub"))
     if (epubs.length === 0) return
-    let firstNew = -1
-    setFiles(prev => {
-      const next = [...prev]
-      for (const file of epubs) {
-        if (!next.some(f => f.name === file.name && f.file.size === file.size)) {
-          if (firstNew === -1) firstNew = next.length
-          next.push({ file, name: file.name, loaded: false })
-        }
-      }
-      filesRef.current = next
-      return next
-    })
-    if (firstNew !== -1) {
-      setFileIdx(firstNew)
-      fileIdxRef.current = firstNew
-      const epub = epubs[0]
-      loadEpub(epub)
-    }
+    const file = epubs[0]
+    setFiles([{ file, name: file.name, loaded: false }])
+    filesRef.current = [{ file, name: file.name, loaded: false }]
+    setFileIdx(0)
+    fileIdxRef.current = 0
+    loadEpub(file)
   }, [loadEpub])
 
   const switchToFile = useCallback(async (index: number) => {
@@ -426,13 +416,17 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
 
   // ── OPDS functions ──
 
-  const opdsBrowse = useCallback(async (path?: string) => {
+  const opdsBrowse = useCallback(async (path?: string, append?: boolean) => {
     if (!calibreConnected) { setOpdsSettingsOpen(true); return }
     setOpdsLoading(true); setOpdsError("")
     try {
       const feed = await fetchFeed(path)
-      setOpdsFeed(feed)
-      if (path) {
+      if (append) {
+        setOpdsFeed(prev => prev ? { ...feed, entries: [...prev.entries, ...feed.entries] } : feed)
+      } else {
+        setOpdsFeed(feed)
+      }
+      if (path && !append) {
         setOpdsNavStack(prev => [...prev, path])
       }
     } catch (err) {
@@ -539,6 +533,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     try {
       await saveCalibreConfig(config)
       setCalibreConnected(true)
+      setCalibreConfig({ url: config.url, username: config.username })
       setOpdsSettingsOpen(false)
       setOpdsFeed(null)
       setOpdsNavStack([])
@@ -551,6 +546,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   const opdsDisconnect = useCallback(async () => {
     await deleteCalibreConfig()
     setCalibreConnected(false)
+    setCalibreConfig(null)
     setOpdsFeed(null)
     setOpdsNavStack([])
     setOpdsError("")
@@ -589,13 +585,48 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     }
   }, [])
 
-  const handleExportXtc = useCallback(async (internal?: boolean, returnBuffer?: boolean): Promise<ArrayBuffer | void> => {
-    const ren = rendererRef.current, mod = moduleRef.current
-    if (!ren || !mod) return
-    if (!internal && processingRef.current) return
-    if (!internal) { processingRef.current = true; setProcessing(true); setShowExport(true) }
+  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
+    const formData = new FormData()
+    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
+    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
+    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
+    formData.append("title", bookMeta.title || "Untitled")
+    formData.append("author", bookMeta.authors || "Unknown")
+    formData.append("device_type", deviceType)
+    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
 
+    const currentFile = filesRef.current[fileIdxRef.current]
+    if (currentFile?.libraryBookId) {
+      formData.append("epub_book_id", currentFile.libraryBookId)
+    }
+
+    // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
+    const canvas = canvasRef.current
+    if (canvas) {
+      const scale = Math.min(200 / canvas.width, 300 / canvas.height)
+      const thumbCanvas = document.createElement("canvas")
+      thumbCanvas.width = Math.round(canvas.width * scale)
+      thumbCanvas.height = Math.round(canvas.height * scale)
+      const ctx = thumbCanvas.getContext("2d")!
+      ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
+      const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
+      if (blob) formData.append("cover", blob, "cover.jpg")
+    }
+
+    const res = await fetch("/api/library", { method: "POST", body: formData })
+    if (!res.ok) throw new Error("Upload failed")
+    return res.json()
+  }, [])
+
+  const handleGenerateXtc = useCallback(async () => {
+    const ren = rendererRef.current, mod = moduleRef.current
+    if (!ren || !mod || processingRef.current) return
+    processingRef.current = true; setProcessing(true)
+
+    const toastId = toast.loading("Preparing...", { duration: Infinity })
     const startTime = performance.now()
+    const currentPage = ren.getCurrentPage()
+
     try {
       const settings = sRef.current
       const bits = settings.qualityMode === "hq" ? 2 : 1
@@ -621,8 +652,7 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
       let totalDataSize = 0
 
       for (let pg = 0; pg < pageCount; pg++) {
-        const pct = Math.round((pg / pageCount) * 100)
-        setExportPct(pct); setExportMsg(<>Rendering page <span className="font-mono">{pg + 1}</span> of <span className="font-mono">{pageCount}</span>...</>)
+        toast.loading(`Rendering page ${pg + 1} of ${pageCount}...`, { id: toastId })
 
         ren.goToPage(pg); ren.renderCurrentPage()
         const buffer = ren.getFrameBuffer()
@@ -729,131 +759,24 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         wo += pageBuffers[i].byteLength
       }
 
+      // Save XTC to library
+      toast.loading("Saving to library...", { id: toastId })
+      await saveToLibrary(buf, metaRef.current, settings.deviceType)
+      await fetchLibraryBooks()
+
+      // Restore preview to current page
+      ren.goToPage(currentPage)
+      renderPreview()
+
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
-      if (returnBuffer) return buf
-      const ext = isHQ ? ".xtch" : ".xtc"
-      const filename = (metaRef.current.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
-      downloadFile(buf, filename)
-      setExportMsg(<>Done! <span className="font-mono">{totalTime}s</span> total (<span className="font-mono">{pageCount}</span> pages)</>)
-      setExportPct(100)
-      if (!internal) setTimeout(() => setShowExport(false), 2000)
+      toast.success(`Generated ${pageCount} pages in ${totalTime}s`, { id: toastId, duration: 4000 })
     } catch (err) {
-      console.error("Export error:", err)
-      setExportMsg("Export failed!")
-      if (!internal) setTimeout(() => setShowExport(false), 2000)
-    } finally {
-      if (!internal) { processingRef.current = false; setProcessing(false) }
-    }
-  }, [])
-
-
-  const handleExportAll = useCallback(async () => {
-    if (filesRef.current.length === 0 || processingRef.current) return
-    processingRef.current = true; setProcessing(true); setShowExport(true)
-    const totalFiles = filesRef.current.length
-    try {
-      for (let fi = 0; fi < totalFiles; fi++) {
-        setExportMsg(<>Loading file <span className="font-mono">{fi + 1}</span>/<span className="font-mono">{totalFiles}</span>...</>)
-        setExportPct((fi / totalFiles) * 100)
-        await loadEpub(filesRef.current[fi].file)
-        setFileIdx(fi); fileIdxRef.current = fi
-        await handleExportXtc(true)
-      }
-      setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files exported!</>)
-      setExportPct(100)
-      setTimeout(() => setShowExport(false), 3000)
-    } catch (err) {
-      console.error("Export all error:", err)
+      console.error("Generate XTC error:", err)
+      toast.error("Generation failed", { id: toastId, duration: 4000 })
     } finally {
       processingRef.current = false; setProcessing(false)
     }
-  }, [loadEpub, handleExportXtc])
-
-  const [saving, setSaving] = useState(false)
-  const [saveMsg, setSaveMsg] = useState("")
-
-  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
-    const formData = new FormData()
-    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
-    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
-    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
-    formData.append("title", bookMeta.title || "Untitled")
-    formData.append("author", bookMeta.authors || "Unknown")
-    formData.append("device_type", deviceType)
-    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
-
-    const currentFile = filesRef.current[fileIdxRef.current]
-    if (currentFile?.libraryBookId) {
-      formData.append("epub_book_id", currentFile.libraryBookId)
-    }
-
-    // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
-    const canvas = canvasRef.current
-    if (canvas) {
-      const scale = Math.min(200 / canvas.width, 300 / canvas.height)
-      const thumbCanvas = document.createElement("canvas")
-      thumbCanvas.width = Math.round(canvas.width * scale)
-      thumbCanvas.height = Math.round(canvas.height * scale)
-      const ctx = thumbCanvas.getContext("2d")!
-      ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
-      const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
-      if (blob) formData.append("cover", blob, "cover.jpg")
-    }
-
-    const res = await fetch("/api/library", { method: "POST", body: formData })
-    if (!res.ok) throw new Error("Upload failed")
-    return res.json()
-  }, [])
-
-  const handleSaveToLibrary = useCallback(async () => {
-    if (processingRef.current) return
-    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
-    try {
-      const buf = await handleExportXtc(true, true)
-      if (!buf) throw new Error("Export returned no data")
-      setExportMsg("Saving to library...")
-      await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
-      setSaveMsg("Saved!")
-      setExportMsg("Saved to library!")
-      fetchLibraryBooks()
-      setExportPct(100)
-      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 2000)
-    } catch (err) {
-      console.error("Save to library error:", err)
-      setExportMsg("Save failed!")
-      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
-    } finally {
-      processingRef.current = false; setProcessing(false)
-    }
-  }, [handleExportXtc, saveToLibrary, fetchLibraryBooks])
-
-  const handleSaveAllToLibrary = useCallback(async () => {
-    if (filesRef.current.length === 0 || processingRef.current) return
-    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
-    const totalFiles = filesRef.current.length
-    try {
-      for (let fi = 0; fi < totalFiles; fi++) {
-        setExportMsg(<>Processing file <span className="font-mono">{fi + 1}</span>/<span className="font-mono">{totalFiles}</span>...</>)
-        setExportPct((fi / totalFiles) * 100)
-        await loadEpub(filesRef.current[fi].file)
-        setFileIdx(fi); fileIdxRef.current = fi
-        const buf = await handleExportXtc(true, true)
-        if (buf) {
-          await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
-        }
-      }
-      fetchLibraryBooks()
-      setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files saved to library!</>)
-      setExportPct(100)
-      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 3000)
-    } catch (err) {
-      console.error("Save all error:", err)
-      setExportMsg("Save failed!")
-      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
-    } finally {
-      processingRef.current = false; setProcessing(false)
-    }
-  }, [loadEpub, handleExportXtc, saveToLibrary, fetchLibraryBooks])
+  }, [saveToLibrary, fetchLibraryBooks, renderPreview])
 
   // ── Initialization ──
 
@@ -996,6 +919,10 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const downloadXtc = useCallback((bookId: string) => {
+    window.location.href = `/api/library/${bookId}`
+  }, [])
+
   // ── Render ──
 
   const dims = getScreenDimensions(s.deviceType, s.orientation)
@@ -1004,10 +931,8 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
     <div className="flex h-screen bg-background">
       <Sidebar
         initialTab={initialTab}
-        files={files} fileIdx={fileIdx} fileInputRef={fileInputRef}
-        addFiles={addFiles} switchToFile={switchToFile} removeFile={removeFile}
-        dragOver={dragOver} setDragOver={setDragOver}
-        setFiles={setFiles} filesRef={filesRef} setBookLoaded={setBookLoaded}
+        fileInputRef={fileInputRef}
+        addFiles={addFiles} dragOver={dragOver} setDragOver={setDragOver}
         s={s} meta={meta} toc={toc} customFontName={customFontName}
         update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
         flushReformat={flushReformat} flushRender={flushRender}
@@ -1024,12 +949,8 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
         opdsBrowse={opdsBrowse} opdsBack={opdsBack}
         opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
         libraryBooks={libraryBooks} libraryLoading={libraryLoading}
-        openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
-        bookLoaded={bookLoaded} processing={processing}
-        showExport={showExport} exportPct={exportPct} exportMsg={exportMsg}
-        saving={saving} saveMsg={saveMsg}
-        handleExportXtc={() => handleExportXtc()} handleExportAll={handleExportAll}
-        handleSaveToLibrary={handleSaveToLibrary} handleSaveAllToLibrary={handleSaveAllToLibrary}
+        openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
+        deleteLibraryBook={deleteLibraryBook}
       />
 
       {/* Content area */}
@@ -1047,12 +968,13 @@ export function Converter({ initialTab, initialSettings }: { initialTab: string;
           canvasRef={canvasRef} s={s} deviceColor={deviceColor}
           bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
           page={page} pages={pages} goToPage={goToPage}
+          processing={processing} handleGenerateXtc={handleGenerateXtc}
         />
       </div>
 
       <CalibreDialog
         open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}
-        calibreConnected={calibreConnected}
+        calibreConnected={calibreConnected} calibreConfig={calibreConfig}
         opdsSaveSettings={opdsSaveSettings} opdsDisconnect={opdsDisconnect}
       />
     </div>
