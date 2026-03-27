@@ -1,7 +1,6 @@
 import React from "react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { type FileInfo } from "@/lib/types"
 
 interface LibraryBook {
   id: string
@@ -15,29 +14,21 @@ interface LibraryBook {
 }
 
 interface LibraryTabProps {
-  // Upload / files
-  files: FileInfo[]
-  fileIdx: number
   fileInputRef: React.RefObject<HTMLInputElement | null>
   addFiles: (files: FileList | File[]) => void
-  switchToFile: (index: number) => void
-  removeFile: (index: number) => void
   dragOver: boolean
   setDragOver: (v: boolean) => void
-  setFiles: React.Dispatch<React.SetStateAction<FileInfo[]>>
-  filesRef: React.MutableRefObject<FileInfo[]>
-  setBookLoaded: (v: boolean) => void
-  // Library
   libraryBooks: LibraryBook[]
   libraryLoading: boolean
   openLibraryEpub: (bookId: string, title: string) => void
+  downloadXtc: (bookId: string) => void
   deleteLibraryBook: (bookId: string) => void
 }
 
 export function LibraryTab({
-  files, fileIdx, fileInputRef, addFiles, switchToFile, removeFile,
-  dragOver, setDragOver, setFiles, filesRef, setBookLoaded,
-  libraryBooks, libraryLoading, openLibraryEpub, deleteLibraryBook,
+  fileInputRef, addFiles,
+  dragOver, setDragOver,
+  libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook,
 }: LibraryTabProps) {
   return (
     <>
@@ -69,33 +60,6 @@ export function LibraryTab({
           onChange={(e) => { if (e.target.files) addFiles(e.target.files); e.target.value = "" }}
         />
       </div>
-
-      {/* Loaded files list */}
-      {files.length > 0 && (
-        <div className="mb-3 rounded-lg border border-border/50 overflow-hidden bg-muted/20">
-          <div className="flex items-center justify-between px-3 py-1.5">
-            <span className="text-[11px] font-medium text-muted-foreground">{files.length} file{files.length > 1 ? "s" : ""}</span>
-            <Button variant="ghost" size="sm" className="h-5 px-1.5 text-[11px] text-muted-foreground hover:text-destructive" onClick={() => { setFiles([]); filesRef.current = []; setBookLoaded(false) }}>
-              Clear
-            </Button>
-          </div>
-          {files.map((f, i) => (
-            <div
-              key={f.name + i}
-              className={`flex items-center gap-2 px-3 py-1.5 text-[12px] cursor-pointer border-t border-border/30 transition-colors ${
-                i === fileIdx ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
-              }`}
-              onClick={() => switchToFile(i)}
-            >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted-foreground"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></svg>
-              <span className="truncate flex-1">{f.name}</span>
-              <button className="ml-1 text-muted-foreground hover:text-destructive text-xs leading-none opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => { e.stopPropagation(); removeFile(i) }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Separator */}
       <div className="flex items-center gap-2 mb-3">
@@ -139,7 +103,7 @@ export function LibraryTab({
                     </Button>
                   )}
                   {book.filename && (
-                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Download XTC" onClick={() => { window.location.href = `/api/library/${book.id}` }}>
+                    <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Download XTC" onClick={() => downloadXtc(book.id)}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                     </Button>
                   )}
