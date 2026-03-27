@@ -1,6 +1,5 @@
 import React from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { FilesTab } from "@/components/converter/files-tab"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
 import { LibraryTab } from "@/components/converter/library-tab"
@@ -13,7 +12,7 @@ import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 interface SidebarProps {
   initialTab: string
 
-  // Files tab
+  // Files (upload + loaded list)
   files: FileInfo[]
   fileIdx: number
   fileInputRef: React.RefObject<HTMLInputElement | null>
@@ -61,7 +60,7 @@ interface SidebarProps {
   opdsDoSearch: () => void
   opdsImportBook: (entry: OpdsEntry) => void
 
-  // Library tab
+  // Library
   libraryBooks: Array<{
     id: string; title: string; author: string | null; filename: string | null
     file_size: number | null; created_at: string; device_type: string | null; epub_filename: string | null
@@ -69,7 +68,6 @@ interface SidebarProps {
   libraryLoading: boolean
   openLibraryEpub: (bookId: string, title: string) => void
   deleteLibraryBook: (bookId: string) => void
-  fetchLibraryBooks: () => void
 
   // Export bar
   bookLoaded: boolean
@@ -87,7 +85,7 @@ interface SidebarProps {
 
 export function Sidebar({
   initialTab,
-  // Files tab
+  // Files
   files, fileIdx, fileInputRef, addFiles, switchToFile, removeFile,
   dragOver, setDragOver, setFiles, filesRef, setBookLoaded,
   // Options tab
@@ -99,8 +97,8 @@ export function Sidebar({
   calibreConnected, opdsFeed, opdsLoading, opdsError, opdsSearch, opdsNavStack,
   opdsDownloading, setOpdsSettingsOpen, setOpdsSearch, setOpdsError,
   opdsBrowse, opdsBack, opdsDoSearch, opdsImportBook,
-  // Library tab
-  libraryBooks, libraryLoading, openLibraryEpub, deleteLibraryBook, fetchLibraryBooks,
+  // Library
+  libraryBooks, libraryLoading, openLibraryEpub, deleteLibraryBook,
   // Export bar
   bookLoaded, processing, showExport, exportPct, exportMsg,
   saving, saveMsg, handleExportXtc, handleExportAll,
@@ -108,22 +106,23 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-      <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse(); if (v === "library") fetchLibraryBooks() }} className="flex-1 flex flex-col min-h-0 gap-0">
+      <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
         <div className="flex items-center px-4 py-2 border-b border-border/50">
           <TabsList className="w-full !h-7 p-0.5">
-            <TabsTrigger value="files" className="text-[12px]">Files</TabsTrigger>
+            <TabsTrigger value="library" className="text-[12px]">Library</TabsTrigger>
             <TabsTrigger value="options" className="text-[12px]">Options</TabsTrigger>
             <TabsTrigger value="calibre" className="text-[12px]">Calibre</TabsTrigger>
-            <TabsTrigger value="library" className="text-[12px]">Library</TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="files" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
-          <FilesTab
+        <TabsContent value="library" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
+          <LibraryTab
             files={files} fileIdx={fileIdx} fileInputRef={fileInputRef}
             addFiles={addFiles} switchToFile={switchToFile} removeFile={removeFile}
             dragOver={dragOver} setDragOver={setDragOver}
             setFiles={setFiles} filesRef={filesRef} setBookLoaded={setBookLoaded}
+            libraryBooks={libraryBooks} libraryLoading={libraryLoading}
+            openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
           />
         </TabsContent>
 
@@ -149,12 +148,6 @@ export function Sidebar({
             setOpdsError={setOpdsError}
             opdsBrowse={opdsBrowse} opdsBack={opdsBack}
             opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
-          />
-        </TabsContent>
-        <TabsContent value="library" className="flex-1 min-h-0 flex flex-col px-4 pt-3">
-          <LibraryTab
-            libraryBooks={libraryBooks} libraryLoading={libraryLoading}
-            openLibraryEpub={openLibraryEpub} deleteLibraryBook={deleteLibraryBook}
           />
         </TabsContent>
       </Tabs>
