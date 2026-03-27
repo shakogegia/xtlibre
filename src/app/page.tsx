@@ -26,8 +26,9 @@ import {
   type DeviceType,
 } from "@/lib/config"
 import {
-  type OpdsServer, type OpdsEntry, type OpdsFeed,
-  loadServer, saveServer, clearServer, fetchFeed, downloadEpub,
+  type OpdsEntry, type OpdsFeed,
+  fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
+  fetchFeed, downloadEpub,
 } from "@/lib/opds"
 
 // Device physical specs → bezel dimensions in device pixels (at 220 PPI)
@@ -584,11 +585,11 @@ export default function EpubToXtcConverter() {
   const [exportMsg, setExportMsg] = useState<React.ReactNode>("")
   const [showExport, setShowExport] = useState(false)
   const [dragOver, setDragOver] = useState(false)
-  const [activeTab, setActiveTab] = useState(0)
+
   const [deviceColor, setDeviceColor] = useState<DeviceColor>("black")
 
   // OPDS state
-  const [opdsServer, setOpdsServer] = useState<OpdsServer | null>(null)
+  const [calibreConnected, setCalibreConnected] = useState(false)
   const [opdsSettingsOpen, setOpdsSettingsOpen] = useState(false)
   const [opdsFeed, setOpdsFeed] = useState<OpdsFeed | null>(null)
   const [opdsLoading, setOpdsLoading] = useState(false)
@@ -605,8 +606,9 @@ export default function EpubToXtcConverter() {
     }
     const savedColor = loadFromStorage<DeviceColor | null>(STORAGE_KEY_DEVICE_COLOR, null)
     if (savedColor) setDeviceColor(savedColor)
-    const savedOpds = loadServer()
-    if (savedOpds) setOpdsServer(savedOpds)
+    fetchCalibreConfig().then(config => {
+      if (config) setCalibreConnected(true)
+    })
   }, [setS])
 
 
@@ -879,23 +881,21 @@ export default function EpubToXtcConverter() {
 
   // ── OPDS functions ──
 
-  const opdsBrowse = useCallback(async (url?: string) => {
-    const server = opdsServer ?? loadServer()
-    if (!server) { setOpdsSettingsOpen(true); return }
+  const opdsBrowse = useCallback(async (path?: string) => {
+    if (!calibreConnected) { setOpdsSettingsOpen(true); return }
     setOpdsLoading(true); setOpdsError("")
     try {
-      const feedUrl = url || `${server.url}/opds`
-      const feed = await fetchFeed(feedUrl, server)
+      const feed = await fetchFeed(path)
       setOpdsFeed(feed)
-      if (url && url !== `${server.url}/opds`) {
-        setOpdsNavStack(prev => [...prev, feedUrl])
+      if (path) {
+        setOpdsNavStack(prev => [...prev, path])
       }
     } catch (err) {
       setOpdsError(err instanceof Error ? err.message : "Failed to connect")
     } finally {
       setOpdsLoading(false)
     }
-  }, [opdsServer])
+  }, [calibreConnected])
 
   const opdsBack = useCallback(() => {
     if (opdsNavStack.length <= 1) {
@@ -905,46 +905,39 @@ export default function EpubToXtcConverter() {
     }
     const prev = [...opdsNavStack]
     prev.pop()
-    const url = prev[prev.length - 1]
+    const path = prev[prev.length - 1]
     setOpdsNavStack(prev)
-    const server = opdsServer ?? loadServer()
-    if (!server) return
     setOpdsLoading(true); setOpdsError("")
-    fetchFeed(url, server)
+    fetchFeed(path)
       .then(feed => setOpdsFeed(feed))
       .catch(err => setOpdsError(err instanceof Error ? err.message : "Failed"))
       .finally(() => setOpdsLoading(false))
-  }, [opdsNavStack, opdsServer, opdsBrowse])
+  }, [opdsNavStack, opdsBrowse])
 
   const opdsDoSearch = useCallback(async () => {
     if (!opdsSearch.trim()) return
-    const server = opdsServer ?? loadServer()
-    if (!server) return
+    if (!calibreConnected) return
     setOpdsLoading(true); setOpdsError("")
     try {
-      const feed = await fetchFeed(
-        `${server.url}/opds/search?query=${encodeURIComponent(opdsSearch.trim())}`,
-        server
-      )
+      const searchPath = `/opds/search?query=${encodeURIComponent(opdsSearch.trim())}`
+      const feed = await fetchFeed(searchPath)
       setOpdsFeed(feed)
-      setOpdsNavStack([`${server.url}/opds/search?query=${encodeURIComponent(opdsSearch.trim())}`])
+      setOpdsNavStack([searchPath])
     } catch (err) {
       setOpdsError(err instanceof Error ? err.message : "Search failed")
     } finally {
       setOpdsLoading(false)
     }
-  }, [opdsSearch, opdsServer])
+  }, [opdsSearch, calibreConnected])
 
   const opdsImportBook = useCallback(async (entry: OpdsEntry) => {
-    if (!entry.epubHref) return
-    const server = opdsServer ?? loadServer()
-    if (!server) return
+    if (!entry.epubPath) return
     setOpdsDownloading(prev => new Set(prev).add(entry.id))
     try {
-      const file = await downloadEpub(entry.epubHref, server)
+      const file = await downloadEpub(entry.epubPath)
       addFiles([file])
     } catch (err) {
-      console.error("OPDS download failed:", err)
+      console.error("Calibre download failed:", err)
       setOpdsError(`Failed to download "${entry.title}"`)
     } finally {
       setOpdsDownloading(prev => {
@@ -953,20 +946,24 @@ export default function EpubToXtcConverter() {
         return next
       })
     }
-  }, [opdsServer, addFiles])
+  }, [addFiles])
 
-  const opdsSaveSettings = useCallback((server: OpdsServer) => {
-    saveServer(server)
-    setOpdsServer(server)
-    setOpdsSettingsOpen(false)
-    setOpdsFeed(null)
-    setOpdsNavStack([])
-    setOpdsError("")
+  const opdsSaveSettings = useCallback(async (config: { url: string; username: string; password: string }) => {
+    try {
+      await saveCalibreConfig(config)
+      setCalibreConnected(true)
+      setOpdsSettingsOpen(false)
+      setOpdsFeed(null)
+      setOpdsNavStack([])
+      setOpdsError("")
+    } catch (err) {
+      setOpdsError(err instanceof Error ? err.message : "Failed to save settings")
+    }
   }, [])
 
-  const opdsDisconnect = useCallback(() => {
-    clearServer()
-    setOpdsServer(null)
+  const opdsDisconnect = useCallback(async () => {
+    await deleteCalibreConfig()
+    setCalibreConnected(false)
     setOpdsFeed(null)
     setOpdsNavStack([])
     setOpdsError("")
@@ -1409,12 +1406,12 @@ export default function EpubToXtcConverter() {
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as number); if (v === 2 && opdsServer && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
+        <Tabs urlSync="tab" defaultValue={0} onValueChange={(v) => { if (v === 2 && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
           <div className="flex items-center px-4 py-2 border-b border-border/50">
             <TabsList className="w-full !h-7 p-0.5">
               <TabsTrigger value={0} className="text-[12px]">Files</TabsTrigger>
               <TabsTrigger value={1} className="text-[12px]">Options</TabsTrigger>
-              <TabsTrigger value={2} className="text-[12px]">Library</TabsTrigger>
+              <TabsTrigger value={2} className="text-[12px]">Calibre</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1866,28 +1863,28 @@ export default function EpubToXtcConverter() {
             {/* Header with settings gear */}
             <div className="flex items-center justify-between mb-3">
               <span className="text-[12px] font-medium text-muted-foreground">
-                {opdsServer ? "Calibre-Web" : "OPDS Library"}
+                {calibreConnected ? "Calibre-Web" : "Calibre"}
               </span>
               <Button
                 variant="ghost"
                 size="sm"
                 className="h-6 w-6 p-0"
                 onClick={() => setOpdsSettingsOpen(true)}
-                title="Library settings"
+                title="Calibre settings"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
               </Button>
             </div>
 
-            {!opdsServer ? (
+            {!calibreConnected ? (
               /* No server configured — prompt to connect */
               <div className="flex-1 flex items-center justify-center">
                 <div className="text-center">
                   <div className="mx-auto w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
                   </div>
-                  <p className="text-[12px] font-medium text-muted-foreground mb-1">Connect to your library</p>
-                  <p className="text-[11px] text-muted-foreground/60 mb-3">Browse and import books from Calibre-Web via OPDS</p>
+                  <p className="text-[12px] font-medium text-muted-foreground mb-1">Connect to Calibre</p>
+                  <p className="text-[11px] text-muted-foreground/60 mb-3">Browse and import books from your Calibre-Web server</p>
                   <Button size="sm" className="h-7 text-[12px]" onClick={() => setOpdsSettingsOpen(true)}>
                     Connect
                   </Button>
@@ -1943,7 +1940,7 @@ export default function EpubToXtcConverter() {
                       <p className="text-[11px] text-muted-foreground text-center py-4">No results</p>
                     )}
                     {opdsFeed.entries.map((entry) => {
-                      const isNav = !!entry.navigationHref
+                      const isNav = !!entry.navigationPath
                       const isDownloading = opdsDownloading.has(entry.id)
                       return (
                         <div
@@ -1951,13 +1948,13 @@ export default function EpubToXtcConverter() {
                           className={`flex items-start gap-2.5 py-2 border-b border-border/30 last:border-0 ${
                             isNav ? "cursor-pointer hover:bg-muted/30 -mx-4 px-4 transition-colors" : ""
                           }`}
-                          onClick={isNav ? () => { if (entry.navigationHref) opdsBrowse(entry.navigationHref) } : undefined}
+                          onClick={isNav ? () => { if (entry.navigationPath) opdsBrowse(entry.navigationPath) } : undefined}
                         >
                           {/* Thumbnail */}
-                          {entry.thumbnailUrl && opdsServer && (
+                          {entry.thumbnailPath && (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={`/api/opds?url=${encodeURIComponent(entry.thumbnailUrl)}`}
+                              src={`/api/calibre/download?path=${encodeURIComponent(entry.thumbnailPath)}`}
                               alt=""
                               className="w-8 h-11 rounded-sm object-cover bg-muted shrink-0"
                               loading="lazy"
@@ -2025,13 +2022,13 @@ export default function EpubToXtcConverter() {
                     })}
 
                     {/* Load more (pagination) */}
-                    {opdsFeed.nextUrl && (
+                    {opdsFeed.nextPath && (
                       <div className="py-2 text-center">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-6 text-[11px] text-muted-foreground"
-                          onClick={() => opdsBrowse(opdsFeed.nextUrl!)}
+                          onClick={() => opdsBrowse(opdsFeed.nextPath!)}
                           disabled={opdsLoading}
                         >
                           Load more...
@@ -2045,7 +2042,7 @@ export default function EpubToXtcConverter() {
                 {!opdsLoading && !opdsFeed && !opdsError && (
                   <div className="flex-1 flex items-center justify-center">
                     <Button size="sm" className="h-7 text-[12px]" onClick={() => opdsBrowse()}>
-                      Browse Library
+                      Browse Calibre
                     </Button>
                   </div>
                 )}
@@ -2125,12 +2122,14 @@ export default function EpubToXtcConverter() {
               variant="ghost"
               size="sm"
               className="h-7 w-7 p-0"
+              disabled={!bookLoaded}
               onClick={() => setDeviceColor(prev => prev === "black" ? "white" : "black")}
               title={deviceColor === "black" ? "Space Black" : "Frost White"}
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="5" y="2" width="14" height="20" rx="2" stroke="currentColor" fill={deviceColor === "black" ? "#1a1a1e" : "#e8e5df"} />
-                <rect x="8" y="5" width="8" height="12" rx="0.5" fill={deviceColor === "black" ? "#555" : "#faf9f7"} />
+              <svg width="14" height="14" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none" />
+                <path d="M12 2 A10 10 0 0 1 12 22 Z" fill={deviceColor === "black" ? "#1a1a1e" : "#ffffff"} />
+                <path d="M12 2 A10 10 0 0 0 12 22 Z" fill={deviceColor === "black" ? "#ffffff" : "#1a1a1e"} />
               </svg>
             </Button>
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!bookLoaded} onClick={() => renderPreview()}>
@@ -2281,9 +2280,9 @@ export default function EpubToXtcConverter() {
       <Dialog open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
-            <DialogTitle className="text-sm">Library Connection</DialogTitle>
+            <DialogTitle className="text-sm">Calibre Connection</DialogTitle>
             <DialogDescription className="text-[12px]">
-              Connect to a Calibre-Web server via OPDS feed.
+              Connect to your Calibre-Web server.
             </DialogDescription>
           </DialogHeader>
           <form
@@ -2303,8 +2302,8 @@ export default function EpubToXtcConverter() {
               <Label className="text-[12px]">Server URL</Label>
               <Input
                 name="url"
-                placeholder="https://books.example.com"
-                defaultValue={opdsServer?.url ?? ""}
+                placeholder="https://calibre.example.com"
+                defaultValue=""
                 className="h-8 text-[12px]"
                 required
               />
@@ -2314,7 +2313,7 @@ export default function EpubToXtcConverter() {
               <Input
                 name="username"
                 placeholder="Optional"
-                defaultValue={opdsServer?.username ?? ""}
+                defaultValue=""
                 className="h-8 text-[12px]"
                 autoComplete="username"
               />
@@ -2325,13 +2324,13 @@ export default function EpubToXtcConverter() {
                 name="password"
                 type="password"
                 placeholder="Optional"
-                defaultValue={opdsServer?.password ?? ""}
+                defaultValue=""
                 className="h-8 text-[12px]"
                 autoComplete="current-password"
               />
             </div>
             <div className="flex justify-between pt-1">
-              {opdsServer && (
+              {calibreConnected && (
                 <Button
                   type="button"
                   variant="ghost"
