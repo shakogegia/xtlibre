@@ -26,6 +26,14 @@ import {
   type DeviceType,
 } from "@/lib/config"
 import {
+  type WasmModule, type Renderer, type TocItem, type FileInfo, type BookMetadata,
+  type Settings, type DeviceColor,
+  DEFAULT_SETTINGS, PROGRESS_BAR_HEIGHT, PROGRESS_BAR_HEIGHT_FULLWIDTH,
+  PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_SETTINGS, STORAGE_KEY_DEVICE_COLOR,
+  loadFromStorage, sv, deviceLabel, orientLabel, alignLabel, spacingLabel,
+  hyphLabel, langLabel, qualLabel,
+} from "@/lib/types"
+import {
   type OpdsEntry, type OpdsFeed,
   fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
   fetchFeed, downloadEpub,
@@ -60,8 +68,6 @@ const DEVICE_BEZELS: Record<DeviceType, {
   },
 }
 
-type DeviceColor = "black" | "white"
-
 const DEVICE_COLORS: Record<DeviceColor, {
   body: string; button: string; slot: string
   highlight: string; screenBorder: string; shadow: string
@@ -87,113 +93,6 @@ const DEVICE_COLORS: Record<DeviceColor, {
 // Estimated CSS PPI for MacBook Retina displays (~127 CSS px/inch)
 const TRUE_LIFE_CSS_PPI = 127
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type WasmModule = any
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type Renderer = any
-
-interface TocItem {
-  title: string
-  page: number
-  children?: TocItem[]
-}
-
-interface FileInfo {
-  file: File
-  name: string
-  loaded: boolean
-  libraryBookId?: string
-}
-
-interface BookMetadata {
-  title?: string
-  authors?: string
-  language?: string
-}
-
-interface Settings {
-  deviceType: DeviceType
-  orientation: number
-  fontSize: number
-  fontWeight: number
-  lineHeight: number
-  margin: number
-  fontFace: string
-  textAlign: number
-  wordSpacing: number
-  hyphenation: number
-  hyphenationLang: string
-  ignoreDocMargins: boolean
-  qualityMode: "fast" | "hq"
-  enableDithering: boolean
-  ditherStrength: number
-  enableNegative: boolean
-  enableProgressBar: boolean
-  progressPosition: "top" | "bottom"
-  showProgressLine: boolean
-  showChapterMarks: boolean
-  showChapterProgress: boolean
-  progressFullWidth: boolean
-  showPageInfo: boolean
-  showBookPercent: boolean
-  showChapterPage: boolean
-  showChapterPercent: boolean
-  progressFontSize: number
-  progressEdgeMargin: number
-  progressSideMargin: number
-  fontHinting: number
-  fontAntialiasing: number
-}
-
-const DEFAULT_SETTINGS: Settings = {
-  deviceType: "x4",
-  orientation: 0,
-  fontSize: 22,
-  fontWeight: 400,
-  lineHeight: 120,
-  margin: 20,
-  fontFace: "Literata",
-  textAlign: -1,
-  wordSpacing: 100,
-  hyphenation: 2,
-  hyphenationLang: "auto",
-  ignoreDocMargins: false,
-  qualityMode: "fast",
-  enableDithering: true,
-  ditherStrength: 70,
-  enableNegative: false,
-  enableProgressBar: true,
-  progressPosition: "bottom",
-  showProgressLine: true,
-  showChapterMarks: true,
-  showChapterProgress: false,
-  progressFullWidth: false,
-  showPageInfo: true,
-  showBookPercent: true,
-  showChapterPage: true,
-  showChapterPercent: false,
-  progressFontSize: 14,
-  progressEdgeMargin: 0,
-  progressSideMargin: 0,
-  fontHinting: 1,
-  fontAntialiasing: 2,
-}
-
-const PROGRESS_BAR_HEIGHT = 14
-const PROGRESS_BAR_HEIGHT_FULLWIDTH = 20
-const PROGRESS_BAR_HEIGHT_EXTENDED = 28
-
-const STORAGE_KEY_SETTINGS = "xtc-settings"
-const STORAGE_KEY_DEVICE_COLOR = "xtc-device-color"
-
-function loadFromStorage<T>(key: string, fallback: T): T {
-  if (typeof window === "undefined") return fallback
-  try {
-    const raw = localStorage.getItem(key)
-    if (raw === null) return fallback
-    return JSON.parse(raw) as T
-  } catch { return fallback }
-}
 
 // ── Helper functions (pure, no React) ──────────────────────────────
 
@@ -1517,18 +1416,6 @@ export default function EpubToXtcConverter() {
     } catch { /* */ }
     e.target.value = ""
   }, [update, applySettings])
-
-  // Slider value helper (base-ui returns number | readonly number[])
-  const sv = (v: number | readonly number[]) => Array.isArray(v) ? v[0] : v
-
-  // Select display label helpers (base-ui Value may show raw value before first open)
-  const deviceLabel: Record<string, string> = { x4: "X4 (480x800)", x3: "X3 (528x792)" }
-  const orientLabel: Record<string, string> = { "0": "Portrait 0°", "90": "Landscape 90°", "180": "Portrait 180°", "270": "Landscape 270°" }
-  const alignLabel: Record<string, string> = { "-1": "Default", "0": "Left", "1": "Right", "2": "Center", "3": "Justify" }
-  const spacingLabel: Record<string, string> = { "50": "Small (50%)", "75": "Condensed", "100": "Normal", "125": "Expanded", "150": "Wide", "200": "Extra Wide" }
-  const hyphLabel: Record<string, string> = { "0": "Off", "1": "Algorithmic", "2": "Dictionary" }
-  const langLabel: Record<string, string> = { auto: "Auto", en: "English", "en-gb": "English (UK)", de: "German", fr: "French", es: "Spanish", it: "Italian", pt: "Portuguese", nl: "Dutch", pl: "Polish", ru: "Russian" }
-  const qualLabel: Record<string, string> = { fast: "Fast (1-bit)", hq: "HQ (2-bit)" }
 
   // File input ref
   const fileInputRef = useRef<HTMLInputElement>(null)
