@@ -17,6 +17,7 @@ import { ChapterList } from "@/components/converter/chapter-list"
 import { FilesTab } from "@/components/converter/files-tab"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
+import { CalibreDialog } from "@/components/converter/calibre-dialog"
 import { LibraryTab } from "@/components/converter/library-tab"
 import { ExportBar } from "@/components/converter/export-bar"
 import { Toolbar } from "@/components/converter/toolbar"
@@ -1108,83 +1109,11 @@ export default function EpubToXtcConverter() {
         />
       </div>
 
-      {/* OPDS Settings Dialog */}
-      <Dialog open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}>
-        <DialogContent className="sm:max-w-[400px]">
-          <DialogHeader>
-            <DialogTitle className="text-sm">Calibre Connection</DialogTitle>
-            <DialogDescription className="text-[12px]">
-              Connect to your Calibre-Web server.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            className="space-y-3 mt-2"
-            onSubmit={(e) => {
-              e.preventDefault()
-              const form = e.target as HTMLFormElement
-              const data = new FormData(form)
-              opdsSaveSettings({
-                url: (data.get("url") as string).replace(/\/+$/, ""),
-                username: data.get("username") as string,
-                password: data.get("password") as string,
-              })
-            }}
-          >
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Server URL</Label>
-              <Input
-                name="url"
-                placeholder="https://calibre.example.com"
-                defaultValue=""
-                className="h-8 text-[12px]"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Username</Label>
-              <Input
-                name="username"
-                placeholder="Optional"
-                defaultValue=""
-                className="h-8 text-[12px]"
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[12px]">Password</Label>
-              <Input
-                name="password"
-                type="password"
-                placeholder="Optional"
-                defaultValue=""
-                className="h-8 text-[12px]"
-                autoComplete="current-password"
-              />
-            </div>
-            <div className="flex justify-between pt-1">
-              {calibreConnected && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 text-[11px] text-destructive hover:text-destructive"
-                  onClick={() => { opdsDisconnect(); setOpdsSettingsOpen(false) }}
-                >
-                  Disconnect
-                </Button>
-              )}
-              <div className="flex gap-2 ml-auto">
-                <Button type="button" variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setOpdsSettingsOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" size="sm" className="h-7 text-[12px]">
-                  Connect
-                </Button>
-              </div>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <CalibreDialog
+        open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}
+        calibreConnected={calibreConnected}
+        opdsSaveSettings={opdsSaveSettings} opdsDisconnect={opdsDisconnect}
+      />
     </div>
   )
 }
