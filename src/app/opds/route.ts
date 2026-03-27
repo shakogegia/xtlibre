@@ -32,7 +32,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
-  const books = listBooks()
+  const books = listBooks().filter(b => b.filename)
   const latestDate = books.length > 0 ? books[0].created_at + "Z" : new Date().toISOString()
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
