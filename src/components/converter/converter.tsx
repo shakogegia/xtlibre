@@ -13,10 +13,11 @@ import { getScreenDimensions } from "@/lib/device"
 import {
   type WasmModule, type Renderer, type TocItem, type FileInfo, type BookMetadata,
   type Settings, type DeviceColor,
-  DEFAULT_SETTINGS, PROGRESS_BAR_HEIGHT, PROGRESS_BAR_HEIGHT_FULLWIDTH,
+  PROGRESS_BAR_HEIGHT, PROGRESS_BAR_HEIGHT_FULLWIDTH,
   PROGRESS_BAR_HEIGHT_EXTENDED, STORAGE_KEY_DEVICE_COLOR,
   loadFromStorage,
 } from "@/lib/types"
+import { saveSettings } from "@/app/actions"
 import {
   type OpdsEntry, type OpdsFeed,
   fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
@@ -25,18 +26,15 @@ import {
 import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData, downloadFile } from "@/lib/image-processing"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
-// TODO(task-6): remove once settings are fully migrated to SQLite
-const STORAGE_KEY_SETTINGS = "xtc-settings"
-
-export function Converter({ initialTab }: { initialTab: string }) {
-  // Settings state (persisted to localStorage, hydrated after mount)
-  const [s, _setS] = useState<Settings>(DEFAULT_SETTINGS)
-  const sRef = useRef<Settings>(DEFAULT_SETTINGS)
+export function Converter({ initialTab, initialSettings }: { initialTab: string; initialSettings: Settings }) {
+  // Settings state (loaded server-side from DB, saved via server action on change)
+  const [s, _setS] = useState<Settings>(initialSettings)
+  const sRef = useRef<Settings>(initialSettings)
   const setS = useCallback((updater: Settings | ((prev: Settings) => Settings)) => {
     _setS(prev => {
       const next = typeof updater === "function" ? updater(prev) : updater
       sRef.current = next
-      try { localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(next)) } catch {}
+      saveSettings(next)
       return next
     })
   }, [])
@@ -83,18 +81,14 @@ export function Converter({ initialTab }: { initialTab: string }) {
   }>>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
 
-  // Hydrate persisted state from localStorage after mount (avoids SSR mismatch)
+  // Hydrate client-only state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
-    const savedSettings = loadFromStorage<Partial<Settings>>(STORAGE_KEY_SETTINGS, {})
-    if (Object.keys(savedSettings).length > 0) {
-      setS(prev => ({ ...prev, ...savedSettings }))
-    }
     const savedColor = loadFromStorage<DeviceColor | null>(STORAGE_KEY_DEVICE_COLOR, null)
     if (savedColor) setDeviceColor(savedColor)
     fetchCalibreConfig().then(config => {
       if (config) setCalibreConnected(true)
     })
-  }, [setS])
+  }, [])
 
 
   useEffect(() => {
