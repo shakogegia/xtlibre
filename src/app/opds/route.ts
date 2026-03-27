@@ -16,8 +16,9 @@ function toRfc3339(sqliteDatetime: string): string {
 }
 
 function bookEntry(book: BookListItem, baseUrl: string, token: string): string {
-  const epubHref = `${baseUrl}/api/library/${book.id}/epub?token=${token}`
+  const xtcHref = `${baseUrl}/api/library/${book.id}?token=${token}`
   const coverHref = `${baseUrl}/api/library/${book.id}/cover?token=${token}`
+  const ext = book.filename!.endsWith(".xtch") ? ".xtch" : ".xtc"
 
   return `
   <entry>
@@ -26,7 +27,7 @@ function bookEntry(book: BookListItem, baseUrl: string, token: string): string {
     <updated>${toRfc3339(book.created_at)}</updated>
     ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
     <content type="text">${escapeXml(book.title)}${book.author ? ` by ${escapeXml(book.author)}` : ""}</content>
-    <link rel="http://opds-spec.org/acquisition/open-access" href="${epubHref}" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="${xtcHref}" type="application/octet-stream" title="${escapeXml(ext.slice(1).toUpperCase())}"/>
     <link rel="http://opds-spec.org/image/thumbnail" href="${coverHref}" type="image/jpeg"/>
     ${book.device_type ? `<category term="${escapeXml(book.device_type)}" label="${escapeXml(book.device_type.toUpperCase())}"/>` : ""}
   </entry>`
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
-  const books = listBooks().filter(b => b.epub_filename)
+  const books = listBooks().filter(b => b.filename)
   const latestDate = books.length > 0 ? toRfc3339(books[0].created_at) : new Date().toISOString()
   const token = await createDownloadToken()
 

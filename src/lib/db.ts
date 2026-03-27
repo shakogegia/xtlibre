@@ -100,6 +100,9 @@ const stmts = {
   linkXtcToBook: db.prepare(`
     UPDATE books SET filename = @filename, device_type = @device_type WHERE id = @id
   `),
+  updateMeta: db.prepare(`
+    UPDATE books SET title = @title, author = @author WHERE id = @id
+  `),
 }
 
 export interface CalibreConfig {
@@ -207,6 +210,10 @@ export function findByOriginalEpub(originalName: string, fileSize: number): Book
 
 export function linkXtcToBook(id: string, filename: string, deviceType: string | null) {
   stmts.linkXtcToBook.run({ id, filename, device_type: deviceType })
+}
+
+export function updateBookMeta(id: string, title: string, author: string | null): boolean {
+  return stmts.updateMeta.run({ id, title, author }).changes > 0
 }
 
 export function getSettings(): Settings | null {

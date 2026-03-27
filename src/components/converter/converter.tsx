@@ -576,6 +576,21 @@ export function Converter({
     }
   }, [])
 
+  const updateLibraryBook = useCallback(async (bookId: string, title: string, author: string | null) => {
+    try {
+      const res = await fetch(`/api/library/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, author }),
+      })
+      if (res.ok) {
+        setLibraryBooks(prev => prev.map(b => b.id === bookId ? { ...b, title, author } : b))
+      }
+    } catch (err) {
+      console.error("Failed to update library book:", err)
+    }
+  }, [])
+
   const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
     const formData = new FormData()
     const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
@@ -936,6 +951,7 @@ export function Converter({
         libraryBooks={libraryBooks} libraryLoading={libraryLoading}
         openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
         deleteLibraryBook={deleteLibraryBook}
+        updateLibraryBook={updateLibraryBook}
       />
 
       {/* Content area */}

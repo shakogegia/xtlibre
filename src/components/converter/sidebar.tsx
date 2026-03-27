@@ -63,6 +63,7 @@ interface SidebarProps {
   openLibraryEpub: (bookId: string, title: string) => void
   downloadXtc: (bookId: string) => void
   deleteLibraryBook: (bookId: string) => void
+  updateLibraryBook: (bookId: string, title: string, author: string | null) => void
 }
 
 export function Sidebar({
@@ -80,7 +81,7 @@ export function Sidebar({
   opdsDownloading, setOpdsSettingsOpen, setOpdsSearch, setOpdsError,
   opdsBrowse, opdsBack, opdsDoSearch, opdsImportBook,
   // Library
-  activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook,
+  activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
 }: SidebarProps) {
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
@@ -101,6 +102,7 @@ export function Sidebar({
             libraryBooks={libraryBooks} libraryLoading={libraryLoading}
             openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
             deleteLibraryBook={deleteLibraryBook}
+            updateLibraryBook={updateLibraryBook}
           />
         </TabsContent>
 

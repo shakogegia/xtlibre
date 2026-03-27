@@ -1,6 +1,8 @@
 import React, { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert"
@@ -33,14 +35,16 @@ interface LibraryTabProps {
   openLibraryEpub: (bookId: string, title: string) => void
   downloadXtc: (bookId: string) => void
   deleteLibraryBook: (bookId: string) => void
+  updateLibraryBook: (bookId: string, title: string, author: string | null) => void
 }
 
 export function LibraryTab({
   fileInputRef, addFiles,
   dragOver, setDragOver,
-  opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook,
+  opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
 }: LibraryTabProps) {
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
+  const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
   return (
     <>
       {/* Upload area */}
@@ -158,6 +162,9 @@ export function LibraryTab({
                   </div>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover/lib:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                  <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Edit metadata" onClick={() => setEditBook({ id: book.id, title: book.title, author: book.author || "" })}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+                  </Button>
                   {book.filename && (
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Download XTC" onClick={() => downloadXtc(book.id)}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -191,6 +198,45 @@ export function LibraryTab({
           </div>
         </ScrollArea>
       )}
+
+      {/* Edit metadata dialog */}
+      <AlertDialog open={!!editBook} onOpenChange={(open) => { if (!open) setEditBook(null) }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+            </AlertDialogMedia>
+            <AlertDialogTitle>Edit metadata</AlertDialogTitle>
+            <AlertDialogDesc>
+              Update the title and author shown in the library and OPDS feed.
+            </AlertDialogDesc>
+          </AlertDialogHeader>
+          {editBook && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-title" className="text-xs">Title</Label>
+                <Input id="edit-title" value={editBook.title} onChange={(e) => setEditBook({ ...editBook, title: e.target.value })} className="h-7 text-xs" />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-author" className="text-xs">Author</Label>
+                <Input id="edit-author" value={editBook.author} onChange={(e) => setEditBook({ ...editBook, author: e.target.value })} className="h-7 text-xs" />
+              </div>
+            </div>
+          )}
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="outline" onClick={() => setEditBook(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={!editBook?.title.trim()}
+              onClick={() => {
+                if (editBook && editBook.title.trim()) {
+                  updateLibraryBook(editBook.id, editBook.title.trim(), editBook.author.trim() || null)
+                  setEditBook(null)
+                }
+              }}
+            >Save</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

@@ -1,6 +1,6 @@
 import path from "path"
 import fs from "fs"
-import { getBook, deleteBook, getLibraryDir } from "@/lib/db"
+import { getBook, deleteBook, getLibraryDir, updateBookMeta } from "@/lib/db"
 import { requireAuth } from "@/lib/auth"
 
 export async function GET(
@@ -33,6 +33,30 @@ export async function GET(
       "Content-Length": String(data.byteLength),
     },
   })
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
+  const { id } = await params
+  const body = await request.json()
+  const title = typeof body.title === "string" ? body.title.trim() : ""
+  const author = typeof body.author === "string" ? body.author.trim() : null
+
+  if (!title) {
+    return Response.json({ error: "title is required" }, { status: 400 })
+  }
+
+  const updated = updateBookMeta(id, title, author || null)
+  if (!updated) {
+    return Response.json({ error: "Not found" }, { status: 404 })
+  }
+
+  return Response.json({ ok: true, id, title, author })
 }
 
 export async function DELETE(
