@@ -10,7 +10,15 @@ export async function GET(request: NextRequest) {
   // Default to /opds root feed
   const path = request.nextUrl.searchParams.get("path") || "/opds"
 
-  const targetUrl = `${config.url}${path}`
+  // Validate path to prevent SSRF — must stay on the configured Calibre origin
+  if (!path.startsWith("/")) {
+    return Response.json({ error: "Path must be absolute" }, { status: 400 })
+  }
+  const target = new URL(path, config.url)
+  if (target.origin !== new URL(config.url).origin) {
+    return Response.json({ error: "Invalid path" }, { status: 400 })
+  }
+  const targetUrl = target.href
 
   const headers: HeadersInit = {
     Accept: "application/atom+xml, application/xml, text/xml",
