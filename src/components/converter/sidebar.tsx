@@ -21,7 +21,9 @@ interface SidebarProps {
   s: Settings
   meta: BookMetadata
   toc: TocItem[]
-  customFontName: string
+  customFonts: Array<{ id: string; name: string; filename: string }>
+  uploadCustomFont: (file: File) => Promise<{ id: string; name: string; filename: string }>
+  deleteCustomFont: (id: string) => Promise<void>
   update: (patch: Partial<Settings>) => void
   updateAndReformat: (patch: Partial<Settings>) => void
   updateAndRender: (patch: Partial<Settings>) => void
@@ -31,8 +33,6 @@ interface SidebarProps {
   handleQualityChange: (mode: "fast" | "hq") => void
   handleHyphenationChange: (val: number) => void
   handleHyphenLangChange: (lang: string | null) => void
-  handleCustomFont: (e: React.ChangeEvent<HTMLInputElement>) => void
-  fontInputRef: React.RefObject<HTMLInputElement | null>
   renderPreview: () => void
   rendererRef: React.MutableRefObject<Renderer>
 
@@ -53,6 +53,7 @@ interface SidebarProps {
   opdsImportBook: (entry: OpdsEntry) => void
 
   // Library
+  activeBookId: string | null
   libraryBooks: Array<{
     id: string; title: string; author: string | null; filename: string | null
     file_size: number | null; created_at: string; device_type: string | null; epub_filename: string | null
@@ -68,16 +69,17 @@ export function Sidebar({
   // Files
   fileInputRef, addFiles, dragOver, setDragOver,
   // Options tab
-  s, meta, toc, customFontName, update, updateAndReformat, updateAndRender,
+  s, meta, toc, customFonts, uploadCustomFont, deleteCustomFont,
+  update, updateAndReformat, updateAndRender,
   flushReformat, flushRender, handleFontChange, handleQualityChange,
-  handleHyphenationChange, handleHyphenLangChange, handleCustomFont, fontInputRef,
+  handleHyphenationChange, handleHyphenLangChange,
   renderPreview, rendererRef,
   // Calibre tab
   calibreConnected, opdsFeed, opdsLoading, opdsError, opdsSearch, opdsNavStack,
   opdsDownloading, setOpdsSettingsOpen, setOpdsSearch, setOpdsError,
   opdsBrowse, opdsBack, opdsDoSearch, opdsImportBook,
   // Library
-  libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook,
+  activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook,
 }: SidebarProps) {
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
@@ -94,6 +96,7 @@ export function Sidebar({
           <LibraryTab
             fileInputRef={fileInputRef} addFiles={addFiles}
             dragOver={dragOver} setDragOver={setDragOver}
+            activeBookId={activeBookId}
             libraryBooks={libraryBooks} libraryLoading={libraryLoading}
             openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
             deleteLibraryBook={deleteLibraryBook}
@@ -102,12 +105,12 @@ export function Sidebar({
 
         <TabsContent value="options" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
           <OptionsTab
-            s={s} meta={meta} toc={toc} customFontName={customFontName}
+            s={s} meta={meta} toc={toc}
+            customFonts={customFonts} uploadCustomFont={uploadCustomFont} deleteCustomFont={deleteCustomFont}
             update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
             flushReformat={flushReformat} flushRender={flushRender}
             handleFontChange={handleFontChange} handleQualityChange={handleQualityChange}
             handleHyphenationChange={handleHyphenationChange} handleHyphenLangChange={handleHyphenLangChange}
-            handleCustomFont={handleCustomFont} fontInputRef={fontInputRef}
             renderPreview={renderPreview} rendererRef={rendererRef}
           />
         </TabsContent>
