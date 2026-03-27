@@ -102,6 +102,7 @@ interface FileInfo {
   file: File
   name: string
   loaded: boolean
+  libraryBookId?: string
 }
 
 interface BookMetadata {
@@ -598,6 +599,13 @@ export default function EpubToXtcConverter() {
   const [opdsNavStack, setOpdsNavStack] = useState<string[]>([])
   const [opdsDownloading, setOpdsDownloading] = useState<Set<string>>(new Set())
 
+  // Library state
+  const [libraryBooks, setLibraryBooks] = useState<Array<{
+    id: string; title: string; author: string | null; filename: string | null
+    file_size: number | null; created_at: string; device_type: string | null; epub_filename: string | null
+  }>>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
+
   // Hydrate persisted state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
     const savedSettings = loadFromStorage<Partial<Settings>>(STORAGE_KEY_SETTINGS, {})
@@ -803,6 +811,53 @@ export default function EpubToXtcConverter() {
     }
   }, [renderPreview])
 
+  const fetchLibraryBooks = useCallback(async () => {
+    setLibraryLoading(true)
+    try {
+      const res = await fetch("/api/library")
+      if (res.ok) {
+        const books = await res.json()
+        setLibraryBooks(books)
+      }
+    } catch (err) {
+      console.error("Failed to fetch library:", err)
+    } finally {
+      setLibraryLoading(false)
+    }
+  }, [])
+
+  const saveEpubToLibrary = useCallback(async (file: File, bookMeta: BookMetadata): Promise<string | null> => {
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("title", bookMeta.title || "Untitled")
+      formData.append("author", bookMeta.authors || "Unknown")
+      formData.append("original_epub_name", file.name)
+
+      // Capture cover thumbnail from the canvas
+      const canvas = canvasRef.current
+      if (canvas) {
+        const scale = Math.min(200 / canvas.width, 300 / canvas.height)
+        const thumbCanvas = document.createElement("canvas")
+        thumbCanvas.width = Math.round(canvas.width * scale)
+        thumbCanvas.height = Math.round(canvas.height * scale)
+        const ctx = thumbCanvas.getContext("2d")!
+        ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
+        const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
+        if (blob) formData.append("cover", blob, "cover.jpg")
+      }
+
+      const res = await fetch("/api/library/epub", { method: "POST", body: formData })
+      if (!res.ok) throw new Error("EPUB upload failed")
+      const data = await res.json()
+      fetchLibraryBooks()
+      return data.id as string
+    } catch (err) {
+      console.error("Auto-save EPUB error:", err)
+      return null
+    }
+  }, [fetchLibraryBooks])
+
   const loadEpub = useCallback(async (file: File) => {
     const mod = moduleRef.current, ren = rendererRef.current
     if (!mod || !ren) return
@@ -826,12 +881,27 @@ export default function EpubToXtcConverter() {
 
       setBookLoaded(true)
       applySettings()
+
+      // Auto-save EPUB to library
+      const currentFile = filesRef.current[fileIdxRef.current]
+      if (currentFile && !currentFile.libraryBookId) {
+        saveEpubToLibrary(file, newMeta).then(bookId => {
+          if (bookId) {
+            setFiles(prev => prev.map(f =>
+              f === currentFile ? { ...f, libraryBookId: bookId } : f
+            ))
+            filesRef.current = filesRef.current.map(f =>
+              f === currentFile ? { ...f, libraryBookId: bookId } : f
+            )
+          }
+        })
+      }
     } catch (err) {
       console.error("Error loading EPUB:", err)
     } finally {
       setLoading(false)
     }
-  }, [applySettings, loadHyphenationPattern])
+  }, [applySettings, loadHyphenationPattern, saveEpubToLibrary])
 
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const epubs = Array.from(newFiles).filter(f => f.name.toLowerCase().endsWith(".epub"))
@@ -935,7 +1005,49 @@ export default function EpubToXtcConverter() {
     setOpdsDownloading(prev => new Set(prev).add(entry.id))
     try {
       const file = await downloadEpub(entry.epubPath)
+
+      // Auto-save EPUB to library with OPDS metadata
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("title", entry.title || "Untitled")
+      formData.append("author", entry.authors?.join(", ") || "Unknown")
+      formData.append("original_epub_name", file.name)
+
+      // Fetch cover thumbnail from Calibre if available
+      if (entry.thumbnailPath) {
+        try {
+          const coverRes = await fetch(`/api/calibre/download?path=${encodeURIComponent(entry.thumbnailPath)}`)
+          if (coverRes.ok) {
+            const coverBlob = await coverRes.blob()
+            formData.append("cover", coverBlob, "cover.jpg")
+          }
+        } catch { /* cover is optional */ }
+      }
+
+      let bookId: string | null = null
+      try {
+        const res = await fetch("/api/library/epub", { method: "POST", body: formData })
+        if (res.ok) {
+          const data = await res.json()
+          bookId = data.id
+        }
+      } catch (err) {
+        console.error("Auto-save Calibre EPUB error:", err)
+      }
+
       addFiles([file])
+
+      // Store library book ID on the file entry
+      if (bookId) {
+        setTimeout(() => {
+          setFiles(prev => prev.map(f =>
+            f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
+          ))
+          filesRef.current = filesRef.current.map(f =>
+            f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
+          )
+        }, 100)
+      }
     } catch (err) {
       console.error("Calibre download failed:", err)
       setOpdsError(`Failed to download "${entry.title}"`)
@@ -968,6 +1080,38 @@ export default function EpubToXtcConverter() {
     setOpdsNavStack([])
     setOpdsError("")
     setOpdsSearch("")
+  }, [])
+
+  const openLibraryEpub = useCallback(async (bookId: string, title: string) => {
+    try {
+      const res = await fetch(`/api/library/${bookId}/epub`)
+      if (!res.ok) throw new Error("Download failed")
+      const blob = await res.blob()
+      const file = new File([blob], `${title}.epub`, { type: "application/epub+zip" })
+      addFiles([file])
+      // Set the library book ID so XTC export links correctly
+      setTimeout(() => {
+        setFiles(prev => prev.map(f =>
+          f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
+        ))
+        filesRef.current = filesRef.current.map(f =>
+          f.name === file.name && f.file.size === file.size ? { ...f, libraryBookId: bookId } : f
+        )
+      }, 100)
+    } catch (err) {
+      console.error("Failed to open library EPUB:", err)
+    }
+  }, [addFiles])
+
+  const deleteLibraryBook = useCallback(async (bookId: string) => {
+    try {
+      const res = await fetch(`/api/library/${bookId}`, { method: "DELETE" })
+      if (res.ok) {
+        setLibraryBooks(prev => prev.filter(b => b.id !== bookId))
+      }
+    } catch (err) {
+      console.error("Failed to delete library book:", err)
+    }
   }, [])
 
   const handleExportXtc = useCallback(async (internal?: boolean, returnBuffer?: boolean): Promise<ArrayBuffer | void> => {
@@ -1163,6 +1307,11 @@ export default function EpubToXtcConverter() {
     formData.append("device_type", deviceType)
     formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
 
+    const currentFile = filesRef.current[fileIdxRef.current]
+    if (currentFile?.libraryBookId) {
+      formData.append("epub_book_id", currentFile.libraryBookId)
+    }
+
     // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
     const canvas = canvasRef.current
     if (canvas) {
@@ -1191,6 +1340,7 @@ export default function EpubToXtcConverter() {
       await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
       setSaveMsg("Saved!")
       setExportMsg("Saved to library!")
+      fetchLibraryBooks()
       setExportPct(100)
       setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 2000)
     } catch (err) {
@@ -1200,7 +1350,7 @@ export default function EpubToXtcConverter() {
     } finally {
       processingRef.current = false; setProcessing(false)
     }
-  }, [handleExportXtc, saveToLibrary])
+  }, [handleExportXtc, saveToLibrary, fetchLibraryBooks])
 
   const handleSaveAllToLibrary = useCallback(async () => {
     if (filesRef.current.length === 0 || processingRef.current) return
@@ -1217,6 +1367,7 @@ export default function EpubToXtcConverter() {
           await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
         }
       }
+      fetchLibraryBooks()
       setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files saved to library!</>)
       setExportPct(100)
       setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 3000)
@@ -1227,7 +1378,7 @@ export default function EpubToXtcConverter() {
     } finally {
       processingRef.current = false; setProcessing(false)
     }
-  }, [loadEpub, handleExportXtc, saveToLibrary])
+  }, [loadEpub, handleExportXtc, saveToLibrary, fetchLibraryBooks])
 
   // ── Initialization ──
 
@@ -1406,12 +1557,13 @@ export default function EpubToXtcConverter() {
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-        <Tabs urlSync="tab" defaultValue={0} onValueChange={(v) => { if (v === 2 && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
+        <Tabs urlSync="tab" defaultValue={0} onValueChange={(v) => { if (v === 2 && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse(); if (v === 3) fetchLibraryBooks() }} className="flex-1 flex flex-col min-h-0 gap-0">
           <div className="flex items-center px-4 py-2 border-b border-border/50">
             <TabsList className="w-full !h-7 p-0.5">
               <TabsTrigger value={0} className="text-[12px]">Files</TabsTrigger>
               <TabsTrigger value={1} className="text-[12px]">Options</TabsTrigger>
               <TabsTrigger value={2} className="text-[12px]">Calibre</TabsTrigger>
+              <TabsTrigger value={3} className="text-[12px]">Library</TabsTrigger>
             </TabsList>
           </div>
 
@@ -2047,6 +2199,55 @@ export default function EpubToXtcConverter() {
                   </div>
                 )}
               </>
+            )}
+          </TabsContent>
+          <TabsContent value={3} className="flex-1 min-h-0 flex flex-col px-4 pt-3">
+            {libraryLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin text-muted-foreground"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              </div>
+            ) : libraryBooks.length === 0 ? (
+              <div className="flex-1 flex items-center justify-center">
+                <p className="text-[12px] text-muted-foreground">No saved books yet</p>
+              </div>
+            ) : (
+              <ScrollArea className="flex-1">
+                <div className="space-y-1 pb-3">
+                  {libraryBooks.map(book => (
+                    <div key={book.id} className="group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium truncate">{book.title}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {book.author && <span className="text-[10px] text-muted-foreground truncate">{book.author}</span>}
+                          <div className="flex gap-1">
+                            {book.epub_filename && (
+                              <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-500 font-medium">EPUB</span>
+                            )}
+                            {book.filename && (
+                              <span className="text-[9px] px-1 py-0.5 rounded bg-green-500/10 text-green-500 font-medium">XTC</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {book.epub_filename && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Open in converter" onClick={() => openLibraryEpub(book.id, book.title)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+                          </Button>
+                        )}
+                        {book.filename && (
+                          <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Download XTC" onClick={() => { window.location.href = `/api/library/${book.id}` }}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" title="Delete" onClick={() => deleteLibraryBook(book.id)}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
             )}
           </TabsContent>
         </Tabs>
