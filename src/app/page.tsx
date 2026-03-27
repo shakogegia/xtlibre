@@ -990,7 +990,7 @@ export default function EpubToXtcConverter() {
     setOpdsSearch("")
   }, [])
 
-  const handleExportXtc = useCallback(async (internal?: boolean) => {
+  const handleExportXtc = useCallback(async (internal?: boolean, returnBuffer?: boolean): Promise<ArrayBuffer | void> => {
     const ren = rendererRef.current, mod = moduleRef.current
     if (!ren || !mod) return
     if (!internal && processingRef.current) return
@@ -1131,6 +1131,7 @@ export default function EpubToXtcConverter() {
       }
 
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
+      if (returnBuffer) return buf
       const ext = isHQ ? ".xtch" : ".xtc"
       const filename = (metaRef.current.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
       downloadFile(buf, filename)
@@ -1168,6 +1169,72 @@ export default function EpubToXtcConverter() {
       processingRef.current = false; setProcessing(false)
     }
   }, [loadEpub, handleExportXtc])
+
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState("")
+
+  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
+    const formData = new FormData()
+    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
+    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
+    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
+    formData.append("title", bookMeta.title || "Untitled")
+    formData.append("author", bookMeta.authors || "Unknown")
+    formData.append("device_type", deviceType)
+    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
+
+    const res = await fetch("/api/library", { method: "POST", body: formData })
+    if (!res.ok) throw new Error("Upload failed")
+    return res.json()
+  }, [])
+
+  const handleSaveToLibrary = useCallback(async () => {
+    if (processingRef.current) return
+    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
+    try {
+      const buf = await handleExportXtc(true, true)
+      if (!buf) throw new Error("Export returned no data")
+      setExportMsg("Saving to library...")
+      await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
+      setSaveMsg("Saved!")
+      setExportMsg("Saved to library!")
+      setExportPct(100)
+      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 2000)
+    } catch (err) {
+      console.error("Save to library error:", err)
+      setExportMsg("Save failed!")
+      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
+    } finally {
+      processingRef.current = false; setProcessing(false)
+    }
+  }, [handleExportXtc, saveToLibrary])
+
+  const handleSaveAllToLibrary = useCallback(async () => {
+    if (filesRef.current.length === 0 || processingRef.current) return
+    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
+    const totalFiles = filesRef.current.length
+    try {
+      for (let fi = 0; fi < totalFiles; fi++) {
+        setExportMsg(<>Processing file <span className="font-mono">{fi + 1}</span>/<span className="font-mono">{totalFiles}</span>...</>)
+        setExportPct((fi / totalFiles) * 100)
+        await loadEpub(filesRef.current[fi].file)
+        setFileIdx(fi); fileIdxRef.current = fi
+        const buf = await handleExportXtc(true, true)
+        if (buf) {
+          await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
+        }
+      }
+      setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files saved to library!</>)
+      setExportPct(100)
+      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 3000)
+    } catch (err) {
+      console.error("Save all error:", err)
+      setExportMsg("Save failed!")
+      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
+    } finally {
+      processingRef.current = false; setProcessing(false)
+    }
+  }, [loadEpub, handleExportXtc, saveToLibrary])
 
   // ── Initialization ──
 
@@ -2012,6 +2079,23 @@ export default function EpubToXtcConverter() {
               Export All ({files.length})
             </Button>
           )}
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" className="flex-1 h-7 text-[11px]" disabled={!bookLoaded || processing} onClick={handleSaveToLibrary}>
+              {saving ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              ) : saveMsg ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+              )}
+              {saveMsg || "Save to Library"}
+            </Button>
+            {files.length > 1 && (
+              <Button variant="outline" className="h-7 text-[11px] px-2" disabled={processing} onClick={handleSaveAllToLibrary} title="Save All to Library">
+                Save All
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
