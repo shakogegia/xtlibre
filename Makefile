@@ -1,6 +1,6 @@
 IMAGE_NAME := xtc
 CONTAINER_NAME := xtc
-DOCKER_REPO ?= $(IMAGE_NAME)
+DOCKER_REPO ?= shakogegia/xtlibre
 PORT ?= 3000
 VOLUME_NAME := xtc-data
 
