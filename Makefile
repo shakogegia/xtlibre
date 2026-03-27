@@ -32,9 +32,8 @@ logs:
 shell:
 	docker exec -it $(CONTAINER_NAME) sh
 
-push: build
-	docker tag $(IMAGE_NAME) $(DOCKER_REPO):latest
-	docker push $(DOCKER_REPO):latest
+push:
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_REPO):latest --push .
 
 clean: stop
 	-docker rmi $(IMAGE_NAME)

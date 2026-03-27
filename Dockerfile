@@ -35,10 +35,15 @@ COPY --from=builder /app/public ./public
 # Copy better-sqlite3 native binding (prebuilt .node binary)
 COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
 
-USER nextjs
+VOLUME /data
 
 EXPOSE 3000
 
-VOLUME /data
+COPY <<'EOF' /entrypoint.sh
+#!/bin/sh
+chown -R nextjs:nodejs /data
+exec su-exec nextjs node server.js
+EOF
+RUN apk add --no-cache su-exec && chmod +x /entrypoint.sh
 
-CMD ["node", "server.js"]
+CMD ["/entrypoint.sh"]
