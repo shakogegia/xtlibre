@@ -1,5 +1,5 @@
 import { listBooks, type BookListItem } from "@/lib/db"
-import { verifyBasicAuth, verifySessionCookie } from "@/lib/auth"
+import { requireAuth } from "@/lib/auth"
 
 function escapeXml(str: string): string {
   return str
@@ -27,16 +27,8 @@ function bookEntry(book: BookListItem, baseUrl: string): string {
 }
 
 export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization")
-  const hasBasicAuth = verifyBasicAuth(authHeader)
-  const hasSession = await verifySessionCookie()
-
-  if (!hasBasicAuth && !hasSession) {
-    return new Response("Unauthorized", {
-      status: 401,
-      headers: { "WWW-Authenticate": 'Basic realm="XTLibre OPDS"' },
-    })
-  }
+  const denied = await requireAuth(request)
+  if (denied) return denied
 
   const url = new URL(request.url)
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
