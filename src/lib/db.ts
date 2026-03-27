@@ -1,6 +1,7 @@
 import Database from "better-sqlite3"
 import path from "path"
 import fs from "fs"
+import { settingsSchema, type Settings } from "@/lib/settings-schema"
 
 const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), "data")
 const LIBRARY_DIR = path.join(DATA_DIR, "library")
@@ -33,6 +34,14 @@ db.exec(`
     url TEXT NOT NULL,
     username TEXT NOT NULL DEFAULT '',
     password TEXT NOT NULL DEFAULT '',
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data TEXT NOT NULL,
     updated_at TEXT DEFAULT (datetime('now'))
   )
 `)
@@ -103,6 +112,17 @@ const calibreStmts = {
   `),
   delete: db.prepare(`DELETE FROM calibre_config WHERE id = 1`),
   getPassword: db.prepare(`SELECT password FROM calibre_config WHERE id = 1`),
+}
+
+const settingsStmts = {
+  get: db.prepare(`SELECT data FROM settings WHERE id = 1`),
+  upsert: db.prepare(`
+    INSERT INTO settings (id, data, updated_at)
+    VALUES (1, @data, datetime('now'))
+    ON CONFLICT(id) DO UPDATE SET
+      data = @data,
+      updated_at = datetime('now')
+  `),
 }
 
 export function getCalibreConfig(): CalibreConfig | null {
@@ -178,4 +198,19 @@ export function findByOriginalEpub(originalName: string, fileSize: number): Book
 
 export function linkXtcToBook(id: string, filename: string, deviceType: string | null) {
   stmts.linkXtcToBook.run({ id, filename, device_type: deviceType })
+}
+
+export function getSettings(): Settings | null {
+  const row = settingsStmts.get.get() as { data: string } | undefined
+  if (!row) return null
+  try {
+    return settingsSchema.parse(JSON.parse(row.data))
+  } catch {
+    return null
+  }
+}
+
+export function setSettings(data: Settings): void {
+  settingsSchema.parse(data)
+  settingsStmts.upsert.run({ data: JSON.stringify(data) })
 }
