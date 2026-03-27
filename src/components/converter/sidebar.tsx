@@ -11,6 +11,8 @@ import {
 import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 
 interface SidebarProps {
+  initialTab: string
+
   // Files tab
   files: FileInfo[]
   fileIdx: number
@@ -84,6 +86,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  initialTab,
   // Files tab
   files, fileIdx, fileInputRef, addFiles, switchToFile, removeFile,
   dragOver, setDragOver, setFiles, filesRef, setBookLoaded,
@@ -105,7 +108,7 @@ export function Sidebar({
 }: SidebarProps) {
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-      <Tabs urlSync="tab" defaultValue="files" onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse(); if (v === "library") fetchLibraryBooks() }} className="flex-1 flex flex-col min-h-0 gap-0">
+      <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse(); if (v === "library") fetchLibraryBooks() }} className="flex-1 flex flex-col min-h-0 gap-0">
         <div className="flex items-center px-4 py-2 border-b border-border/50">
           <TabsList className="w-full !h-7 p-0.5">
             <TabsTrigger value="files" className="text-[12px]">Files</TabsTrigger>
