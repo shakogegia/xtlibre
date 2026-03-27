@@ -48,6 +48,7 @@ The quickest way to get started is with the pre-built image from Docker Hub:
 docker run -d \
   --name xtlibre \
   -p 3000:3000 \
+  -e PUBLIC_URL=https://books.example.com \
   -v xtlibre-data:/data \
   shakogegia/xtlibre
 ```
@@ -60,6 +61,8 @@ services:
     image: shakogegia/xtlibre
     ports:
       - "3000:3000"
+    environment:
+      - PUBLIC_URL=https://books.example.com
     volumes:
       - xtlibre-data:/data
     restart: unless-stopped
@@ -77,6 +80,8 @@ Open [http://localhost:3000](http://localhost:3000) to use the converter. Conver
 ### OPDS endpoint
 
 Point your Xteink device to `http://<your-server>:3000/opds` to browse and download XTC files from your library.
+
+Set `PUBLIC_URL` to the externally reachable address (e.g. `https://books.example.com`) so that OPDS feed links use the correct host. When omitted, URLs are derived from the incoming request.
 
 ### Building from source
 

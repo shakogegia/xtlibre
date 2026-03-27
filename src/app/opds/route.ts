@@ -27,7 +27,7 @@ function bookEntry(book: BookListItem, baseUrl: string): string {
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
-  const baseUrl = `${url.protocol}//${url.host}`
+  const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
   const books = listBooks()
   const latestDate = books.length > 0 ? books[0].created_at + "Z" : new Date().toISOString()
 
