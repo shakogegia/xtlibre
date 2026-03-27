@@ -1,11 +1,15 @@
 import path from "path"
 import fs from "fs"
 import { getBook, deleteBook, getLibraryDir } from "@/lib/db"
+import { requireAuth } from "@/lib/auth"
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
   const { id } = await params
   const book = getBook(id)
   if (!book) {
@@ -31,9 +35,12 @@ export async function GET(
 }
 
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
   const { id } = await params
   const book = getBook(id)
   if (!book) {

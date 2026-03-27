@@ -62,4 +62,15 @@ export function verifyBasicAuth(authHeader: string | null): boolean {
   }
 }
 
+/** Check Basic Auth or session cookie; return 401 Response if neither valid, or null if authorized */
+export async function requireAuth(request: Request): Promise<Response | null> {
+  const hasBasicAuth = verifyBasicAuth(request.headers.get("authorization"))
+  const hasSession = await verifySessionCookie()
+  if (hasBasicAuth || hasSession) return null
+  return new Response("Unauthorized", {
+    status: 401,
+    headers: { "WWW-Authenticate": 'Basic realm="XTLibre"' },
+  })
+}
+
 export { SESSION_COOKIE, SESSION_MAX_AGE }

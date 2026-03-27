@@ -3,8 +3,12 @@ import { randomUUID } from "crypto"
 import path from "path"
 import fs from "fs"
 import { insertBook, listBooks, getLibraryDir } from "@/lib/db"
+import { requireAuth } from "@/lib/auth"
 
 export async function POST(request: NextRequest) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
   try {
     const formData = await request.formData()
     const file = formData.get("file") as File | null
@@ -49,7 +53,10 @@ export async function POST(request: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
   try {
     const books = listBooks()
     return Response.json(books)

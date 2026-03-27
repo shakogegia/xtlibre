@@ -22,12 +22,10 @@ async function isAuthenticated(request: NextRequest): Promise<boolean> {
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Allow OPDS with Basic Auth (for e-reader devices)
+  // Let OPDS handle its own auth (Basic Auth + session cookie)
+  // so the route can return 401 + WWW-Authenticate to trigger the browser prompt
   if (pathname === "/opds") {
-    const auth = request.headers.get("authorization")
-    if (auth?.startsWith("Basic ")) {
-      return NextResponse.next()
-    }
+    return NextResponse.next()
   }
 
   // Check session cookie
