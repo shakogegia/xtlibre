@@ -197,8 +197,10 @@ export function CalibreTab({
                           {entry.formats.map((f, i) => {
                             const label = f.type.includes("epub") ? "EPUB"
                               : f.type.includes("pdf") ? "PDF"
+                              : f.type.includes("mobi8") || f.path.toLowerCase().includes("/azw3/") ? "AZW3"
                               : f.type.includes("mobi") ? "MOBI"
                               : f.type.includes("fb2") ? "FB2"
+                              : f.type.includes("amazon") || f.path.toLowerCase().includes("/azw/") ? "AZW"
                               : f.type.split("/").pop()?.toUpperCase() || "?"
                             return (
                               <span
