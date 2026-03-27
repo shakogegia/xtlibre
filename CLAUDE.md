@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# XTC Converter
+# XTLibre
 
 EPUB-to-XTC converter for Xteink e-readers (X4, X3). Renders EPUBs via CREngine WASM, previews on a realistic device frame, and exports .xtc files.
 

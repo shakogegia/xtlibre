@@ -1,4 +1,5 @@
 import { listBooks, type BookListItem } from "@/lib/db"
+import { verifyBasicAuth, verifySessionCookie } from "@/lib/auth"
 
 function escapeXml(str: string): string {
   return str
@@ -26,6 +27,17 @@ function bookEntry(book: BookListItem, baseUrl: string): string {
 }
 
 export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization")
+  const hasBasicAuth = verifyBasicAuth(authHeader)
+  const hasSession = await verifySessionCookie()
+
+  if (!hasBasicAuth && !hasSession) {
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: { "WWW-Authenticate": 'Basic realm="XTLibre OPDS"' },
+    })
+  }
+
   const url = new URL(request.url)
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
   const books = listBooks()
@@ -35,9 +47,9 @@ export async function GET(request: Request) {
 <feed xmlns="http://www.w3.org/2005/Atom"
       xmlns:opds="http://opds-spec.org/2010/catalog">
   <id>urn:uuid:xtc-library</id>
-  <title>XTC Library</title>
+  <title>XTLibre Library</title>
   <updated>${latestDate}</updated>
-  <author><name>XTC Converter</name></author>
+  <author><name>XTLibre</name></author>
   <link rel="self" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
   <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
 ${books.map((b) => bookEntry(b, baseUrl)).join("\n")}

@@ -1,8 +1,8 @@
-IMAGE_NAME := xtc
-CONTAINER_NAME := xtc
+IMAGE_NAME := xtlibre
+CONTAINER_NAME := xtlibre
 DOCKER_REPO ?= shakogegia/xtlibre
 PORT ?= 3000
-VOLUME_NAME := xtc-data
+VOLUME_NAME := xtlibre-data
 
 .PHONY: dev build run stop logs push clean shell
 
