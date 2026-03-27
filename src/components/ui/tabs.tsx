@@ -1,15 +1,55 @@
 "use client"
 
+import { useCallback, useEffect, useState } from "react"
 import { Tabs as TabsPrimitive } from "@base-ui/react/tabs"
 import { cva, type VariantProps } from "class-variance-authority"
 
 import { cn } from "@/lib/utils"
 
+type TabsProps = TabsPrimitive.Root.Props & {
+  /** When set, syncs the active tab to a URL search param with this name. */
+  urlSync?: string
+}
+
 function Tabs({
   className,
   orientation = "horizontal",
+  urlSync,
+  value: valueProp,
+  defaultValue,
+  onValueChange,
   ...props
-}: TabsPrimitive.Root.Props) {
+}: TabsProps) {
+  // Start with undefined so server and client render the same initial value
+  // (defaultValue), then sync from the URL after hydration.
+  const [urlValue, setUrlValue] = useState<TabsPrimitive.Root.Props["value"]>(undefined)
+
+  useEffect(() => {
+    if (!urlSync) return
+    const param = new URLSearchParams(window.location.search).get(urlSync)
+    if (param === null) return
+    const num = Number(param)
+    setUrlValue(Number.isFinite(num) ? num : param)
+  }, [urlSync])
+
+  const isControlled = valueProp !== undefined
+  const activeValue = urlSync
+    ? (isControlled ? valueProp : (urlValue ?? defaultValue))
+    : (valueProp ?? undefined)
+
+  const handleValueChange = useCallback(
+    (newValue: TabsPrimitive.Root.Props["value"], details: TabsPrimitive.Root.ChangeEventDetails) => {
+      if (urlSync) {
+        setUrlValue(newValue)
+        const url = new URL(window.location.href)
+        url.searchParams.set(urlSync, String(newValue))
+        window.history.replaceState({}, "", url.toString())
+      }
+      onValueChange?.(newValue, details)
+    },
+    [urlSync, onValueChange]
+  )
+
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
@@ -17,6 +57,10 @@ function Tabs({
       className={cn(
         "group/tabs flex gap-2 data-horizontal:flex-col",
         className
+      )}
+      {...(urlSync
+        ? { value: activeValue, onValueChange: handleValueChange }
+        : { value: valueProp, defaultValue, onValueChange }
       )}
       {...props}
     />
