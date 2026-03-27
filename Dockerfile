@@ -21,6 +21,9 @@ ENV NODE_ENV=production
 ENV HOSTNAME=0.0.0.0
 ENV PORT=3000
 ENV DATA_DIR=/data
+# Set PUBLIC_URL to the externally reachable URL (e.g. https://books.example.com)
+# so OPDS feed links point to the correct host instead of the container's internal address.
+# ENV PUBLIC_URL=
 
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs && \
