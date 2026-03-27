@@ -62,11 +62,36 @@ export function verifyBasicAuth(authHeader: string | null): boolean {
   }
 }
 
-/** Check Basic Auth or session cookie; return 401 Response if neither valid, or null if authorized */
+/** Create a short-lived token for OPDS download links (e-readers often don't re-send Basic Auth) */
+export async function createDownloadToken(): Promise<string> {
+  return new SignJWT({ purpose: "opds-download" })
+    .setProtectedHeader({ alg: "HS256" })
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(getSecret())
+}
+
+/** Verify a download token from a URL query parameter */
+async function verifyDownloadToken(token: string | null): Promise<boolean> {
+  if (!token) return false
+  try {
+    const { payload } = await jwtVerify(token, getSecret())
+    return payload.purpose === "opds-download"
+  } catch {
+    return false
+  }
+}
+
+/** Check Basic Auth, session cookie, or URL download token; return 401 Response if none valid */
 export async function requireAuth(request: Request): Promise<Response | null> {
   const hasBasicAuth = verifyBasicAuth(request.headers.get("authorization"))
   const hasSession = await verifySessionCookie()
   if (hasBasicAuth || hasSession) return null
+
+  const url = new URL(request.url)
+  const hasToken = await verifyDownloadToken(url.searchParams.get("token"))
+  if (hasToken) return null
+
   return new Response("Unauthorized", {
     status: 401,
     headers: { "WWW-Authenticate": 'Basic realm="XTLibre"' },

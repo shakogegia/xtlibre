@@ -9,14 +9,31 @@ function getSecret(): Uint8Array {
 }
 
 async function isAuthenticated(request: NextRequest): Promise<boolean> {
+  // Session cookie
   const session = request.cookies.get("session")
-  if (!session?.value) return false
-  try {
-    await jwtVerify(session.value, getSecret())
-    return true
-  } catch {
-    return false
+  if (session?.value) {
+    try {
+      await jwtVerify(session.value, getSecret())
+      return true
+    } catch {}
   }
+
+  // HTTP Basic Auth (e-readers, OPDS clients)
+  const authHeader = request.headers.get("authorization")
+  if (authHeader?.startsWith("Basic ")) {
+    return true // let the route handler verify credentials
+  }
+
+  // URL download token (OPDS acquisition links)
+  const token = request.nextUrl.searchParams.get("token")
+  if (token) {
+    try {
+      const { payload } = await jwtVerify(token, getSecret())
+      if (payload.purpose === "opds-download") return true
+    } catch {}
+  }
+
+  return false
 }
 
 export async function proxy(request: NextRequest) {

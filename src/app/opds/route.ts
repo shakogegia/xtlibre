@@ -1,5 +1,5 @@
 import { listBooks, type BookListItem } from "@/lib/db"
-import { requireAuth } from "@/lib/auth"
+import { requireAuth, createDownloadToken } from "@/lib/auth"
 
 function escapeXml(str: string): string {
   return str
@@ -15,9 +15,9 @@ function toRfc3339(sqliteDatetime: string): string {
   return sqliteDatetime.replace(" ", "T") + "Z"
 }
 
-function bookEntry(book: BookListItem, baseUrl: string): string {
-  const epubHref = `${baseUrl}/api/library/${book.id}/epub`
-  const coverHref = `${baseUrl}/api/library/${book.id}/cover`
+function bookEntry(book: BookListItem, baseUrl: string, token: string): string {
+  const epubHref = `${baseUrl}/api/library/${book.id}/epub?token=${token}`
+  const coverHref = `${baseUrl}/api/library/${book.id}/cover?token=${token}`
 
   return `
   <entry>
@@ -26,7 +26,7 @@ function bookEntry(book: BookListItem, baseUrl: string): string {
     <updated>${toRfc3339(book.created_at)}</updated>
     ${book.author ? `<author><name>${escapeXml(book.author)}</name></author>` : ""}
     <content type="text">${escapeXml(book.title)}${book.author ? ` by ${escapeXml(book.author)}` : ""}</content>
-    <link rel="http://opds-spec.org/acquisition" href="${epubHref}" type="application/epub+zip"/>
+    <link rel="http://opds-spec.org/acquisition/open-access" href="${epubHref}" type="application/epub+zip"/>
     <link rel="http://opds-spec.org/image/thumbnail" href="${coverHref}" type="image/jpeg"/>
     ${book.device_type ? `<category term="${escapeXml(book.device_type)}" label="${escapeXml(book.device_type.toUpperCase())}"/>` : ""}
   </entry>`
@@ -40,6 +40,7 @@ export async function GET(request: Request) {
   const baseUrl = (process.env.PUBLIC_URL || `${url.protocol}//${url.host}`).replace(/\/+$/, "")
   const books = listBooks().filter(b => b.epub_filename)
   const latestDate = books.length > 0 ? toRfc3339(books[0].created_at) : new Date().toISOString()
+  const token = await createDownloadToken()
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom"
@@ -50,7 +51,7 @@ export async function GET(request: Request) {
   <author><name>XTLibre</name></author>
   <link rel="self" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
   <link rel="start" href="${baseUrl}/opds" type="application/atom+xml;profile=opds-catalog;kind=acquisition"/>
-${books.map((b) => bookEntry(b, baseUrl)).join("\n")}
+${books.map((b) => bookEntry(b, baseUrl, token)).join("\n")}
 </feed>`
 
   return new Response(xml, {
