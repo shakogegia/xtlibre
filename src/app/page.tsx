@@ -17,9 +17,17 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import {
   DEVICE_SPECS, FONT_FAMILIES, ARABIC_FONTS, LANG_TO_PATTERN,
   type DeviceType,
 } from "@/lib/config"
+import {
+  type OpdsServer, type OpdsEntry, type OpdsFeed,
+  loadServer, saveServer, clearServer, fetchFeed, downloadEpub,
+} from "@/lib/opds"
 
 // Device physical specs → bezel dimensions in device pixels (at 220 PPI)
 // X4: 114×69mm body, 480×800 screen at 220 PPI → screen = 55.4×92.4mm
@@ -576,8 +584,19 @@ export default function EpubToXtcConverter() {
   const [exportMsg, setExportMsg] = useState<React.ReactNode>("")
   const [showExport, setShowExport] = useState(false)
   const [dragOver, setDragOver] = useState(false)
+  const [activeTab, setActiveTab] = useState(0)
   const [darkMode, setDarkMode] = useState(true)
   const [deviceColor, setDeviceColor] = useState<DeviceColor>("black")
+
+  // OPDS state
+  const [opdsServer, setOpdsServer] = useState<OpdsServer | null>(null)
+  const [opdsSettingsOpen, setOpdsSettingsOpen] = useState(false)
+  const [opdsFeed, setOpdsFeed] = useState<OpdsFeed | null>(null)
+  const [opdsLoading, setOpdsLoading] = useState(false)
+  const [opdsError, setOpdsError] = useState("")
+  const [opdsSearch, setOpdsSearch] = useState("")
+  const [opdsNavStack, setOpdsNavStack] = useState<string[]>([])
+  const [opdsDownloading, setOpdsDownloading] = useState<Set<string>>(new Set())
 
   // Hydrate persisted state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
@@ -594,6 +613,8 @@ export default function EpubToXtcConverter() {
       setDarkMode(savedDark)
       document.documentElement.classList.toggle("dark", savedDark)
     }
+    const savedOpds = loadServer()
+    if (savedOpds) setOpdsServer(savedOpds)
   }, [setS])
 
   const toggleDarkMode = useCallback(() => {
@@ -873,7 +894,103 @@ export default function EpubToXtcConverter() {
     })
   }, [switchToFile])
 
-  const handleExportXtc = useCallback(async (internal?: boolean) => {
+  // ── OPDS functions ──
+
+  const opdsBrowse = useCallback(async (url?: string) => {
+    const server = opdsServer ?? loadServer()
+    if (!server) { setOpdsSettingsOpen(true); return }
+    setOpdsLoading(true); setOpdsError("")
+    try {
+      const feedUrl = url || `${server.url}/opds`
+      const feed = await fetchFeed(feedUrl, server)
+      setOpdsFeed(feed)
+      if (url && url !== `${server.url}/opds`) {
+        setOpdsNavStack(prev => [...prev, feedUrl])
+      }
+    } catch (err) {
+      setOpdsError(err instanceof Error ? err.message : "Failed to connect")
+    } finally {
+      setOpdsLoading(false)
+    }
+  }, [opdsServer])
+
+  const opdsBack = useCallback(() => {
+    if (opdsNavStack.length <= 1) {
+      setOpdsNavStack([])
+      opdsBrowse()
+      return
+    }
+    const prev = [...opdsNavStack]
+    prev.pop()
+    const url = prev[prev.length - 1]
+    setOpdsNavStack(prev)
+    const server = opdsServer ?? loadServer()
+    if (!server) return
+    setOpdsLoading(true); setOpdsError("")
+    fetchFeed(url, server)
+      .then(feed => setOpdsFeed(feed))
+      .catch(err => setOpdsError(err instanceof Error ? err.message : "Failed"))
+      .finally(() => setOpdsLoading(false))
+  }, [opdsNavStack, opdsServer, opdsBrowse])
+
+  const opdsDoSearch = useCallback(async () => {
+    if (!opdsSearch.trim()) return
+    const server = opdsServer ?? loadServer()
+    if (!server) return
+    setOpdsLoading(true); setOpdsError("")
+    try {
+      const feed = await fetchFeed(
+        `${server.url}/opds/search?query=${encodeURIComponent(opdsSearch.trim())}`,
+        server
+      )
+      setOpdsFeed(feed)
+      setOpdsNavStack([`${server.url}/opds/search?query=${encodeURIComponent(opdsSearch.trim())}`])
+    } catch (err) {
+      setOpdsError(err instanceof Error ? err.message : "Search failed")
+    } finally {
+      setOpdsLoading(false)
+    }
+  }, [opdsSearch, opdsServer])
+
+  const opdsImportBook = useCallback(async (entry: OpdsEntry) => {
+    if (!entry.epubHref) return
+    const server = opdsServer ?? loadServer()
+    if (!server) return
+    setOpdsDownloading(prev => new Set(prev).add(entry.id))
+    try {
+      const file = await downloadEpub(entry.epubHref, server)
+      addFiles([file])
+    } catch (err) {
+      console.error("OPDS download failed:", err)
+      setOpdsError(`Failed to download "${entry.title}"`)
+    } finally {
+      setOpdsDownloading(prev => {
+        const next = new Set(prev)
+        next.delete(entry.id)
+        return next
+      })
+    }
+  }, [opdsServer, addFiles])
+
+  const opdsSaveSettings = useCallback((server: OpdsServer) => {
+    saveServer(server)
+    setOpdsServer(server)
+    setOpdsSettingsOpen(false)
+    setOpdsFeed(null)
+    setOpdsNavStack([])
+    setOpdsError("")
+  }, [])
+
+  const opdsDisconnect = useCallback(() => {
+    clearServer()
+    setOpdsServer(null)
+    setOpdsFeed(null)
+    setOpdsNavStack([])
+    setOpdsError("")
+    setOpdsSearch("")
+  }, [])
+
+  const handleExportXtc = useCallback(async (internal?: boolean, returnBuffer?: boolean): Promise<ArrayBuffer | void> => {
     const ren = rendererRef.current, mod = moduleRef.current
     if (!ren || !mod) return
     if (!internal && processingRef.current) return
@@ -1014,6 +1131,7 @@ export default function EpubToXtcConverter() {
       }
 
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
+      if (returnBuffer) return buf
       const ext = isHQ ? ".xtch" : ".xtc"
       const filename = (metaRef.current.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
       downloadFile(buf, filename)
@@ -1051,6 +1169,85 @@ export default function EpubToXtcConverter() {
       processingRef.current = false; setProcessing(false)
     }
   }, [loadEpub, handleExportXtc])
+
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState("")
+
+  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
+    const formData = new FormData()
+    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
+    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
+    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
+    formData.append("title", bookMeta.title || "Untitled")
+    formData.append("author", bookMeta.authors || "Unknown")
+    formData.append("device_type", deviceType)
+    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
+
+    // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
+    const canvas = canvasRef.current
+    if (canvas) {
+      const scale = Math.min(200 / canvas.width, 300 / canvas.height)
+      const thumbCanvas = document.createElement("canvas")
+      thumbCanvas.width = Math.round(canvas.width * scale)
+      thumbCanvas.height = Math.round(canvas.height * scale)
+      const ctx = thumbCanvas.getContext("2d")!
+      ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
+      const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
+      if (blob) formData.append("cover", blob, "cover.jpg")
+    }
+
+    const res = await fetch("/api/library", { method: "POST", body: formData })
+    if (!res.ok) throw new Error("Upload failed")
+    return res.json()
+  }, [])
+
+  const handleSaveToLibrary = useCallback(async () => {
+    if (processingRef.current) return
+    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
+    try {
+      const buf = await handleExportXtc(true, true)
+      if (!buf) throw new Error("Export returned no data")
+      setExportMsg("Saving to library...")
+      await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
+      setSaveMsg("Saved!")
+      setExportMsg("Saved to library!")
+      setExportPct(100)
+      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 2000)
+    } catch (err) {
+      console.error("Save to library error:", err)
+      setExportMsg("Save failed!")
+      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
+    } finally {
+      processingRef.current = false; setProcessing(false)
+    }
+  }, [handleExportXtc, saveToLibrary])
+
+  const handleSaveAllToLibrary = useCallback(async () => {
+    if (filesRef.current.length === 0 || processingRef.current) return
+    processingRef.current = true; setProcessing(true); setShowExport(true); setSaving(true)
+    const totalFiles = filesRef.current.length
+    try {
+      for (let fi = 0; fi < totalFiles; fi++) {
+        setExportMsg(<>Processing file <span className="font-mono">{fi + 1}</span>/<span className="font-mono">{totalFiles}</span>...</>)
+        setExportPct((fi / totalFiles) * 100)
+        await loadEpub(filesRef.current[fi].file)
+        setFileIdx(fi); fileIdxRef.current = fi
+        const buf = await handleExportXtc(true, true)
+        if (buf) {
+          await saveToLibrary(buf as ArrayBuffer, metaRef.current, sRef.current.deviceType)
+        }
+      }
+      setExportMsg(<>All <span className="font-mono">{totalFiles}</span> files saved to library!</>)
+      setExportPct(100)
+      setTimeout(() => { setShowExport(false); setSaveMsg(""); setSaving(false) }, 3000)
+    } catch (err) {
+      console.error("Save all error:", err)
+      setExportMsg("Save failed!")
+      setTimeout(() => { setShowExport(false); setSaving(false) }, 2000)
+    } finally {
+      processingRef.current = false; setProcessing(false)
+    }
+  }, [loadEpub, handleExportXtc, saveToLibrary])
 
   // ── Initialization ──
 
@@ -1229,11 +1426,12 @@ export default function EpubToXtcConverter() {
     <div className="flex h-screen bg-background">
       {/* Sidebar */}
       <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
-        <Tabs defaultValue={0} className="flex-1 flex flex-col min-h-0 gap-0">
+        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as number); if (v === 2 && opdsServer && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
           <div className="flex items-center px-4 py-2 border-b border-border/50">
             <TabsList className="w-full !h-7 p-0.5">
               <TabsTrigger value={0} className="text-[12px]">Files</TabsTrigger>
               <TabsTrigger value={1} className="text-[12px]">Options</TabsTrigger>
+              <TabsTrigger value={2} className="text-[12px]">Library</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1680,6 +1878,197 @@ export default function EpubToXtcConverter() {
 
           <div className="h-3" />
           </TabsContent>
+
+          <TabsContent value={2} className="flex-1 min-h-0 flex flex-col px-4 pt-3">
+            {/* Header with settings gear */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[12px] font-medium text-muted-foreground">
+                {opdsServer ? "Calibre-Web" : "OPDS Library"}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 w-6 p-0"
+                onClick={() => setOpdsSettingsOpen(true)}
+                title="Library settings"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+              </Button>
+            </div>
+
+            {!opdsServer ? (
+              /* No server configured — prompt to connect */
+              <div className="flex-1 flex items-center justify-center">
+                <div className="text-center">
+                  <div className="mx-auto w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-muted-foreground"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H19a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H6.5a1 1 0 0 1 0-5H20"/></svg>
+                  </div>
+                  <p className="text-[12px] font-medium text-muted-foreground mb-1">Connect to your library</p>
+                  <p className="text-[11px] text-muted-foreground/60 mb-3">Browse and import books from Calibre-Web via OPDS</p>
+                  <Button size="sm" className="h-7 text-[12px]" onClick={() => setOpdsSettingsOpen(true)}>
+                    Connect
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              /* Connected — show browse UI */
+              <>
+                {/* Search bar */}
+                <div className="flex gap-1.5 mb-3">
+                  <Input
+                    placeholder="Search books..."
+                    className="h-7 text-[12px]"
+                    value={opdsSearch}
+                    onChange={(e) => setOpdsSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && opdsDoSearch()}
+                  />
+                  <Button variant="outline" size="sm" className="h-7 px-2" onClick={opdsDoSearch} disabled={opdsLoading}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+                  </Button>
+                </div>
+
+                {/* Nav breadcrumb */}
+                {opdsNavStack.length > 0 && (
+                  <button
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground mb-2 transition-colors"
+                    onClick={opdsBack}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+                    Back
+                  </button>
+                )}
+
+                {/* Error */}
+                {opdsError && (
+                  <div className="text-[11px] text-destructive bg-destructive/10 rounded px-2 py-1.5 mb-2">
+                    {opdsError}
+                    <button className="ml-2 underline" onClick={() => setOpdsError("")}>dismiss</button>
+                  </div>
+                )}
+
+                {/* Loading */}
+                {opdsLoading && (
+                  <div className="flex items-center justify-center py-8">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin text-muted-foreground"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                  </div>
+                )}
+
+                {/* Book list */}
+                {!opdsLoading && opdsFeed && (
+                  <div className="flex-1 min-h-0 overflow-y-auto -mx-4 px-4">
+                    {opdsFeed.entries.length === 0 && (
+                      <p className="text-[11px] text-muted-foreground text-center py-4">No results</p>
+                    )}
+                    {opdsFeed.entries.map((entry) => {
+                      const isNav = !!entry.navigationHref
+                      const isDownloading = opdsDownloading.has(entry.id)
+                      return (
+                        <div
+                          key={entry.id}
+                          className={`flex items-start gap-2.5 py-2 border-b border-border/30 last:border-0 ${
+                            isNav ? "cursor-pointer hover:bg-muted/30 -mx-4 px-4 transition-colors" : ""
+                          }`}
+                          onClick={isNav ? () => { if (entry.navigationHref) opdsBrowse(entry.navigationHref) } : undefined}
+                        >
+                          {/* Thumbnail */}
+                          {entry.thumbnailUrl && opdsServer && (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={`/api/opds?url=${encodeURIComponent(entry.thumbnailUrl)}`}
+                              alt=""
+                              className="w-8 h-11 rounded-sm object-cover bg-muted shrink-0"
+                              loading="lazy"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = "none" }}
+                            />
+                          )}
+
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[12px] font-medium truncate">{entry.title}</div>
+                            {entry.authors.length > 0 && (
+                              <div className="text-[11px] text-muted-foreground truncate">
+                                {entry.authors.join(", ")}
+                              </div>
+                            )}
+                            {/* Format badges */}
+                            {entry.formats.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {entry.formats.map((f, i) => {
+                                  const label = f.type.includes("epub") ? "EPUB"
+                                    : f.type.includes("pdf") ? "PDF"
+                                    : f.type.includes("mobi") ? "MOBI"
+                                    : f.type.includes("fb2") ? "FB2"
+                                    : f.type.split("/").pop()?.toUpperCase() || "?"
+                                  return (
+                                    <span
+                                      key={i}
+                                      className={`text-[10px] px-1 py-0.5 rounded ${
+                                        label === "EPUB"
+                                          ? "bg-primary/10 text-primary font-medium"
+                                          : "bg-muted text-muted-foreground"
+                                      }`}
+                                    >
+                                      {label}
+                                    </span>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Import button — only for books with EPUB */}
+                          {entry.hasEpub && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 shrink-0 mt-0.5"
+                              disabled={isDownloading}
+                              onClick={(e) => { e.stopPropagation(); opdsImportBook(entry) }}
+                              title="Import EPUB"
+                            >
+                              {isDownloading ? (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                              ) : (
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                              )}
+                            </Button>
+                          )}
+
+                          {/* Chevron for navigation entries */}
+                          {isNav && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-muted-foreground mt-1"><path d="m9 18 6-6-6-6"/></svg>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    {/* Load more (pagination) */}
+                    {opdsFeed.nextUrl && (
+                      <div className="py-2 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-[11px] text-muted-foreground"
+                          onClick={() => opdsBrowse(opdsFeed.nextUrl!)}
+                          disabled={opdsLoading}
+                        >
+                          Load more...
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Browse button — shown when no feed loaded yet */}
+                {!opdsLoading && !opdsFeed && !opdsError && (
+                  <div className="flex-1 flex items-center justify-center">
+                    <Button size="sm" className="h-7 text-[12px]" onClick={() => opdsBrowse()}>
+                      Browse Library
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </TabsContent>
         </Tabs>
 
         {/* Export buttons pinned to bottom */}
@@ -1703,6 +2092,23 @@ export default function EpubToXtcConverter() {
               Export All ({files.length})
             </Button>
           )}
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" className="flex-1 h-7 text-[11px]" disabled={!bookLoaded || processing} onClick={handleSaveToLibrary}>
+              {saving ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+              ) : saveMsg ? (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1 text-green-500"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+              )}
+              {saveMsg || "Save to Library"}
+            </Button>
+            {files.length > 1 && (
+              <Button variant="outline" className="h-7 text-[11px] px-2" disabled={processing} onClick={handleSaveAllToLibrary} title="Save All to Library">
+                Save All
+              </Button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1893,6 +2299,84 @@ export default function EpubToXtcConverter() {
           )}
         </div>
       </div>
+
+      {/* OPDS Settings Dialog */}
+      <Dialog open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Library Connection</DialogTitle>
+            <DialogDescription className="text-[12px]">
+              Connect to a Calibre-Web server via OPDS feed.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-3 mt-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const form = e.target as HTMLFormElement
+              const data = new FormData(form)
+              opdsSaveSettings({
+                url: (data.get("url") as string).replace(/\/+$/, ""),
+                username: data.get("username") as string,
+                password: data.get("password") as string,
+              })
+            }}
+          >
+            <div className="space-y-1.5">
+              <Label className="text-[12px]">Server URL</Label>
+              <Input
+                name="url"
+                placeholder="https://books.example.com"
+                defaultValue={opdsServer?.url ?? ""}
+                className="h-8 text-[12px]"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px]">Username</Label>
+              <Input
+                name="username"
+                placeholder="Optional"
+                defaultValue={opdsServer?.username ?? ""}
+                className="h-8 text-[12px]"
+                autoComplete="username"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[12px]">Password</Label>
+              <Input
+                name="password"
+                type="password"
+                placeholder="Optional"
+                defaultValue={opdsServer?.password ?? ""}
+                className="h-8 text-[12px]"
+                autoComplete="current-password"
+              />
+            </div>
+            <div className="flex justify-between pt-1">
+              {opdsServer && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[11px] text-destructive hover:text-destructive"
+                  onClick={() => { opdsDisconnect(); setOpdsSettingsOpen(false) }}
+                >
+                  Disconnect
+                </Button>
+              )}
+              <div className="flex gap-2 ml-auto">
+                <Button type="button" variant="outline" size="sm" className="h-7 text-[12px]" onClick={() => setOpdsSettingsOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" size="sm" className="h-7 text-[12px]">
+                  Connect
+                </Button>
+              </div>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
