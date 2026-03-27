@@ -12,6 +12,7 @@ import {
   Accordion, AccordionContent, AccordionItem, AccordionTrigger,
 } from "@/components/ui/accordion"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { ThemeToggle } from "@/components/theme-toggle"
 import { Progress } from "@/components/ui/progress"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Separator } from "@/components/ui/separator"
@@ -182,7 +183,6 @@ const PROGRESS_BAR_HEIGHT_EXTENDED = 28
 
 const STORAGE_KEY_SETTINGS = "xtc-settings"
 const STORAGE_KEY_DEVICE_COLOR = "xtc-device-color"
-const STORAGE_KEY_DARK_MODE = "xtc-dark-mode"
 
 function loadFromStorage<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback
@@ -585,7 +585,6 @@ export default function EpubToXtcConverter() {
   const [showExport, setShowExport] = useState(false)
   const [dragOver, setDragOver] = useState(false)
   const [activeTab, setActiveTab] = useState(0)
-  const [darkMode, setDarkMode] = useState(true)
   const [deviceColor, setDeviceColor] = useState<DeviceColor>("black")
 
   // OPDS state
@@ -606,26 +605,10 @@ export default function EpubToXtcConverter() {
     }
     const savedColor = loadFromStorage<DeviceColor | null>(STORAGE_KEY_DEVICE_COLOR, null)
     if (savedColor) setDeviceColor(savedColor)
-    const savedDark = loadFromStorage<boolean | null>(STORAGE_KEY_DARK_MODE, null)
-    if (savedDark === null) {
-      setDarkMode(document.documentElement.classList.contains("dark"))
-    } else {
-      setDarkMode(savedDark)
-      document.documentElement.classList.toggle("dark", savedDark)
-    }
     const savedOpds = loadServer()
     if (savedOpds) setOpdsServer(savedOpds)
   }, [setS])
 
-  const toggleDarkMode = useCallback(() => {
-    setDarkMode(prev => {
-      const next = !prev
-      document.documentElement.classList.toggle("dark", next)
-      document.cookie = `theme=${next ? "dark" : "light"}; path=/; max-age=${365 * 24 * 60 * 60}`
-      try { localStorage.setItem(STORAGE_KEY_DARK_MODE, JSON.stringify(next)) } catch {}
-      return next
-    })
-  }, [])
 
   useEffect(() => {
     try { localStorage.setItem(STORAGE_KEY_DEVICE_COLOR, JSON.stringify(deviceColor)) } catch {}
@@ -2153,13 +2136,7 @@ export default function EpubToXtcConverter() {
             <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!bookLoaded} onClick={() => renderPreview()}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
             </Button>
-            <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={toggleDarkMode}>
-              {darkMode ? (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
-              ) : (
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
-              )}
-            </Button>
+            <ThemeToggle />
           </div>
         </div>
 
