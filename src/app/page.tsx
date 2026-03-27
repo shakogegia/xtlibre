@@ -1183,6 +1183,19 @@ export default function EpubToXtcConverter() {
     formData.append("device_type", deviceType)
     formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
 
+    // Capture cover thumbnail from the canvas (scaled down to max 200px wide)
+    const canvas = canvasRef.current
+    if (canvas) {
+      const scale = Math.min(200 / canvas.width, 300 / canvas.height)
+      const thumbCanvas = document.createElement("canvas")
+      thumbCanvas.width = Math.round(canvas.width * scale)
+      thumbCanvas.height = Math.round(canvas.height * scale)
+      const ctx = thumbCanvas.getContext("2d")!
+      ctx.drawImage(canvas, 0, 0, thumbCanvas.width, thumbCanvas.height)
+      const blob = await new Promise<Blob | null>(r => thumbCanvas.toBlob(r, "image/jpeg", 0.7))
+      if (blob) formData.append("cover", blob, "cover.jpg")
+    }
+
     const res = await fetch("/api/library", { method: "POST", body: formData })
     if (!res.ok) throw new Error("Upload failed")
     return res.json()
