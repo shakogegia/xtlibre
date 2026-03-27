@@ -42,12 +42,50 @@ Works with any OPDS-compatible server, including:
 
 ## Self-hosting with Docker
 
+The quickest way to get started is with the pre-built image from Docker Hub:
+
+```bash
+docker run -d \
+  --name xtlibre \
+  -p 3000:3000 \
+  -v xtlibre-data:/data \
+  shakogegia/xtlibre
+```
+
+Or with `docker-compose.yml`:
+
+```yaml
+services:
+  xtlibre:
+    image: shakogegia/xtlibre
+    ports:
+      - "3000:3000"
+    volumes:
+      - xtlibre-data:/data
+    restart: unless-stopped
+
+volumes:
+  xtlibre-data:
+```
+
+```bash
+docker compose up -d
+```
+
+Open [http://localhost:3000](http://localhost:3000) to use the converter. Converted XTC files saved via "Save to Library" are stored in the volume and served over OPDS.
+
+### OPDS endpoint
+
+Point your Xteink device to `http://<your-server>:3000/opds` to browse and download XTC files from your library.
+
+### Building from source
+
+If you want to build the image yourself:
+
 ```bash
 make build
 make run
 ```
-
-This builds the Docker image and starts a container on port 3000 with a persistent volume for your library. Converted XTC files saved via "Save to Library" are stored in the volume and served over OPDS.
 
 | Command      | Description                        |
 | ------------ | ---------------------------------- |
@@ -63,12 +101,8 @@ Override defaults with environment variables:
 
 ```bash
 make run PORT=8080                          # custom port
-make push DOCKER_REPO=myuser/xtlibre       # custom Docker Hub repo
+make push DOCKER_REPO=shakogegia/xtlibre   # Docker Hub repo
 ```
-
-### OPDS endpoint
-
-Point your Xteink device to `http://<your-server>:3000/opds` to browse and download XTC files from your library.
 
 ## Tech stack
 
