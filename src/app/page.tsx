@@ -1892,6 +1892,7 @@ export default function EpubToXtcConverter() {
                         >
                           {/* Thumbnail */}
                           {entry.thumbnailUrl && opdsServer && (
+                            // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={`/api/opds?url=${encodeURIComponent(entry.thumbnailUrl)}`}
                               alt=""
