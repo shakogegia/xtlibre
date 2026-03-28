@@ -29,21 +29,24 @@ export async function POST(request: Request) {
   const nameBase = book.author ? `${book.title} - ${book.author}` : book.title
   const filename = nameBase.replace(/[^a-zA-Z0-9 ._-]/g, "_").substring(0, 80).trim() + ext
 
+  let deviceWs: WebSocket | null = null
+  let done = false
+
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder()
       const send = (data: object) => {
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`)) } catch { /* client gone */ }
       }
 
       const ws = new WebSocket(`ws://${host}:${port}/`)
-      let done = false
+      deviceWs = ws
 
       const timeout = setTimeout(() => {
         if (!done) {
           done = true
           send({ type: "error", message: "Connection timed out" })
-          controller.close()
+          try { controller.close() } catch {}
           try { ws.close() } catch {}
         }
       }, 10000)
@@ -90,7 +93,7 @@ export async function POST(request: Request) {
         if (msg === "DONE") {
           done = true
           send({ type: "done" })
-          controller.close()
+          try { controller.close() } catch {}
           ws.close()
           return
         }
@@ -98,7 +101,7 @@ export async function POST(request: Request) {
         if (msg.startsWith("ERROR")) {
           done = true
           send({ type: "error", message: msg.slice(6) || "Device error" })
-          controller.close()
+          try { controller.close() } catch {}
           ws.close()
           return
         }
@@ -109,7 +112,7 @@ export async function POST(request: Request) {
           done = true
           clearTimeout(timeout)
           send({ type: "error", message: `Connection failed: ${err.message}` })
-          controller.close()
+          try { controller.close() } catch {}
         }
       })
 
@@ -117,9 +120,13 @@ export async function POST(request: Request) {
         if (!done) {
           done = true
           send({ type: "error", message: "Connection closed unexpectedly" })
-          controller.close()
+          try { controller.close() } catch {}
         }
       })
+    },
+    cancel() {
+      done = true
+      try { deviceWs?.close() } catch {}
     },
   })
 
