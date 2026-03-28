@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
-import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible"
 import {
   Select, SelectTrigger, SelectValue,
@@ -62,7 +62,6 @@ export function DeviceTab({
   const [testing, setTesting] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState<"unknown" | "reachable" | "unreachable">("unknown")
   const [deviceInfo, setDeviceInfo] = useState<DeviceStatus | null>(null)
-  const [infoDismissed, setInfoDismissed] = useState(false)
   const [showManual, setShowManual] = useState(false)
   const [initialCheckDone, setInitialCheckDone] = useState(false)
 
@@ -168,10 +167,10 @@ export function DeviceTab({
   const hasDevice = !!s.deviceHost
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 relative h-full">
       {/* ── LOADING STATE ── */}
       {!isConnected && !initialCheckDone && (
-        <div className="flex flex-col items-center justify-center gap-2 h-full min-h-[200px]">
+        <div className="flex flex-col items-center justify-center gap-2 absolute inset-0">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           <p className="text-[11px] text-muted-foreground">Looking for device...</p>
         </div>
@@ -181,28 +180,21 @@ export function DeviceTab({
       {!isConnected && initialCheckDone && (
         <>
           {/* Setup info alert */}
-          {!infoDismissed && (
-            <Alert className="text-[11px]">
-              <Info className="w-3.5 h-3.5" />
-              <AlertTitle className="text-[11px]">Connect your Xteink</AlertTitle>
-              <AlertDescription className="text-[10px]">
-                <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
-                  <li>On your device, go to <strong>File Transfer</strong></li>
-                  <li>Select <strong>Join a Network</strong> or <strong>Calibre Wireless</strong></li>
-                </ol>
-                <p className="mt-1.5 text-muted-foreground">
-                  {s.deviceTransferMode === "direct"
-                    ? "This computer (browser) must be on the same network as the device."
-                    : "The XTLibre server must be on the same network as the device."}
-                </p>
-              </AlertDescription>
-              <AlertAction>
-                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setInfoDismissed(true)}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-                </Button>
-              </AlertAction>
-            </Alert>
-          )}
+          <Alert className="text-[11px]">
+            <Info className="w-3.5 h-3.5" />
+            <AlertTitle className="text-[11px]">Connect your Xteink</AlertTitle>
+            <AlertDescription className="text-[10px]">
+              <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
+                <li>On your device, go to <strong>File Transfer</strong></li>
+                <li>Select <strong>Join a Network</strong> or <strong>Calibre Wireless</strong></li>
+              </ol>
+              <p className="mt-1.5 text-muted-foreground">
+                {s.deviceTransferMode === "direct"
+                  ? "This computer (browser) must be on the same network as the device."
+                  : "The XTLibre server must be on the same network as the device."}
+              </p>
+            </AlertDescription>
+          </Alert>
 
           {/* Transfer mode — shown before connection so user picks the right setup */}
           <div className="space-y-1">
