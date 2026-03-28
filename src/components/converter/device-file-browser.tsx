@@ -6,7 +6,11 @@ import {
   AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Folder, FileText, BookOpen, Trash2, ChevronRight, RefreshCw } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Spinner } from "@/components/ui/spinner"
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { Folder, FolderPlus, FolderInput, Pencil, FileText, BookOpen, Trash2, Upload, Ellipsis, ChevronRight, RefreshCw, Check, X } from "lucide-react"
 
 interface DeviceFile {
   name: string
@@ -37,6 +41,22 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
   const [error, setError] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ name: string; path: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [creatingFolder, setCreatingFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState("")
+  const [creatingInProgress, setCreatingInProgress] = useState(false)
+  const newFolderInputRef = React.useRef<HTMLInputElement>(null)
+  const [renameTarget, setRenameTarget] = useState<{ name: string; path: string } | null>(null)
+  const [renameName, setRenameName] = useState("")
+  const [renaming, setRenaming] = useState(false)
+  const renameInputRef = React.useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
+  const [moveTarget, setMoveTarget] = useState<{ name: string; path: string } | null>(null)
+  const [moveDest, setMoveDest] = useState("/")
+  const [moveFolders, setMoveFolders] = useState<DeviceFile[]>([])
+  const [moveLoading, setMoveLoading] = useState(false)
+  const [moving, setMoving] = useState(false)
 
   const loadFiles = useCallback(async (path: string) => {
     setLoading(true)
@@ -113,6 +133,183 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     }
   }, [deleteTarget, host, port, currentPath, loadFiles])
 
+  const handleCreateFolder = useCallback(async () => {
+    const name = newFolderName.trim()
+    if (!name) return
+    setCreatingInProgress(true)
+    try {
+      const resp = await fetch("/api/device/files/mkdir", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, port, path: currentPath, name }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ error: "Create failed" }))
+        throw new Error(data.error)
+      }
+      setCreatingFolder(false)
+      setNewFolderName("")
+      loadFiles(currentPath)
+    } catch {
+      // Keep input visible on error
+    } finally {
+      setCreatingInProgress(false)
+    }
+  }, [newFolderName, host, port, currentPath, loadFiles])
+
+  const cancelCreateFolder = useCallback(() => {
+    setCreatingFolder(false)
+    setNewFolderName("")
+  }, [])
+
+  useEffect(() => {
+    if (creatingFolder && newFolderInputRef.current) {
+      newFolderInputRef.current.focus()
+    }
+  }, [creatingFolder])
+
+  const openRename = useCallback((name: string, path: string) => {
+    setRenameTarget({ name, path })
+    setRenameName(name)
+  }, [])
+
+  const handleRename = useCallback(async () => {
+    if (!renameTarget) return
+    const name = renameName.trim()
+    if (!name || name === renameTarget.name) {
+      setRenameTarget(null)
+      return
+    }
+    setRenaming(true)
+    try {
+      const resp = await fetch("/api/device/files/rename", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, port, path: renameTarget.path, name }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ error: "Rename failed" }))
+        throw new Error(data.error)
+      }
+      setRenameTarget(null)
+      loadFiles(currentPath)
+    } catch {
+      // Keep input visible on error
+    } finally {
+      setRenaming(false)
+    }
+  }, [renameTarget, renameName, host, port, currentPath, loadFiles])
+
+  useEffect(() => {
+    if (renameTarget && renameInputRef.current) {
+      renameInputRef.current.focus()
+      // Select filename without extension
+      const dotIdx = renameTarget.name.lastIndexOf(".")
+      renameInputRef.current.setSelectionRange(0, dotIdx > 0 ? dotIdx : renameTarget.name.length)
+    }
+  }, [renameTarget])
+
+  const handleUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadProgress(0)
+
+    const formData = new FormData()
+    formData.append("file", file)
+    formData.append("host", host)
+    formData.append("path", currentPath)
+
+    const xhr = new XMLHttpRequest()
+    xhr.upload.addEventListener("progress", (ev) => {
+      if (ev.lengthComputable) {
+        // Cap at 99% — 100% only when device confirms receipt
+        setUploadProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)))
+      }
+    })
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        setUploadProgress(100)
+      }
+    })
+    xhr.addEventListener("loadend", () => {
+      setUploading(false)
+      setUploadProgress(0)
+      if (fileInputRef.current) fileInputRef.current.value = ""
+      if (xhr.status >= 200 && xhr.status < 300) {
+        loadFiles(currentPath)
+      }
+    })
+    xhr.open("POST", "/api/device/files/upload")
+    xhr.send(formData)
+  }, [host, currentPath, loadFiles])
+
+  const loadMoveFolders = useCallback(async (path: string) => {
+    setMoveLoading(true)
+    try {
+      const resp = await fetch("/api/device/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, port, path }),
+      })
+      if (!resp.ok) throw new Error()
+      const data = await resp.json()
+      const dirs = (Array.isArray(data) ? data : [])
+        .filter((f: DeviceFile) => f.isDirectory)
+        .sort((a: DeviceFile, b: DeviceFile) => a.name.localeCompare(b.name))
+      setMoveFolders(dirs)
+    } catch {
+      setMoveFolders([])
+    } finally {
+      setMoveLoading(false)
+    }
+  }, [host, port])
+
+  const openMoveDialog = useCallback((name: string, path: string) => {
+    setMoveTarget({ name, path })
+    // Start browsing from the file's parent directory
+    const parentPath = path.substring(0, path.lastIndexOf("/")) || "/"
+    setMoveDest(parentPath)
+    loadMoveFolders(parentPath)
+  }, [loadMoveFolders])
+
+  const navigateMoveDest = useCallback((folder: string) => {
+    const newDest = moveDest === "/" ? `/${folder}` : `${moveDest}/${folder}`
+    setMoveDest(newDest)
+    loadMoveFolders(newDest)
+  }, [moveDest, loadMoveFolders])
+
+  const navigateMoveUp = useCallback(() => {
+    const idx = moveDest.lastIndexOf("/")
+    const parent = idx <= 0 ? "/" : moveDest.slice(0, idx)
+    setMoveDest(parent)
+    loadMoveFolders(parent)
+  }, [moveDest, loadMoveFolders])
+
+  const handleMove = useCallback(async () => {
+    if (!moveTarget) return
+    setMoving(true)
+    try {
+      const resp = await fetch("/api/device/files/move", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ host, port, path: moveTarget.path, dest: moveDest }),
+      })
+      if (!resp.ok) {
+        const data = await resp.json().catch(() => ({ error: "Move failed" }))
+        throw new Error(data.error)
+      }
+      setMoveTarget(null)
+      loadFiles(currentPath)
+    } catch {
+      // Keep dialog open on error
+    } finally {
+      setMoving(false)
+    }
+  }, [moveTarget, host, port, moveDest, currentPath, loadFiles])
+
+  const moveDestBreadcrumbs = ["/", ...moveDest.split("/").filter(Boolean)]
+
   const breadcrumbs = ["/", ...currentPath.split("/").filter(Boolean)]
 
   return (
@@ -138,6 +335,29 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
           </React.Fragment>
         ))}
         <div className="flex-1" />
+        <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger render={
+              <Button
+                variant="ghost" size="sm" className="h-5 w-5 p-0"
+                onClick={() => { if (!uploading) fileInputRef.current?.click() }}
+              />
+            }>
+              {uploading ? (
+                <Spinner className="w-2.5 h-2.5" />
+              ) : (
+                <Upload className="w-2.5 h-2.5" />
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {uploading ? `Uploading ${uploadProgress}%` : "Upload file"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setCreatingFolder(true)} title="New folder">
+          <FolderPlus className="w-2.5 h-2.5" />
+        </Button>
         <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => loadFiles(currentPath)} title="Refresh">
           <RefreshCw className="w-2.5 h-2.5" />
         </Button>
@@ -178,36 +398,129 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
               <span className="text-xs text-muted-foreground">..</span>
             </button>
           )}
-          {files.map((file) => (
-            <div
-              key={file.name}
-              className={`group/file flex items-center gap-2 px-2 py-1 rounded-md hover:bg-muted/50 ${
-                file.isDirectory ? "cursor-pointer" : ""
-              }`}
-              onClick={file.isDirectory ? () => navigateTo(file.name) : undefined}
-            >
-              {file.isDirectory ? (
-                <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              ) : file.isEpub ? (
-                <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              ) : (
-                <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-              )}
-              <span className="text-xs truncate flex-1">{file.name}</span>
-              {!file.isDirectory && (
-                <span className="text-[10px] text-muted-foreground shrink-0">{formatSize(file.size)}</span>
-              )}
-              {!file.isDirectory && (
-                <Button
-                  variant="ghost" size="sm"
-                  className="h-5 w-5 p-0 opacity-0 group-hover/file:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
-                  onClick={(e) => { e.stopPropagation(); setDeleteTarget({ name: file.name, path: joinPath(currentPath, file.name) }) }}
-                >
-                  <Trash2 className="w-3 h-3" />
-                </Button>
-              )}
+          {creatingFolder && (
+            <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-muted/50">
+              <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <Input
+                ref={newFolderInputRef}
+                className="h-5 text-xs px-1 py-0 flex-1"
+                placeholder="Folder name"
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleCreateFolder()
+                  if (e.key === "Escape") cancelCreateFolder()
+                }}
+                disabled={creatingInProgress}
+              />
+              <Button
+                variant="ghost" size="sm"
+                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                onClick={handleCreateFolder}
+                disabled={creatingInProgress || !newFolderName.trim()}
+              >
+                <Check className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost" size="sm"
+                className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                onClick={cancelCreateFolder}
+                disabled={creatingInProgress}
+              >
+                <X className="w-3 h-3" />
+              </Button>
             </div>
-          ))}
+          )}
+          {files.map((file) => {
+            const filePath = joinPath(currentPath, file.name)
+            const isRenaming = renameTarget?.path === filePath
+            return (
+              <div
+                key={file.name}
+                className={`group/file flex items-center gap-2 px-2 py-1 rounded-md hover:bg-muted/50 ${
+                  file.isDirectory ? "cursor-pointer" : ""
+                }`}
+                onClick={file.isDirectory && !isRenaming ? () => navigateTo(file.name) : undefined}
+              >
+                {file.isDirectory ? (
+                  <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                ) : file.isEpub ? (
+                  <BookOpen className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                ) : (
+                  <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                )}
+                {isRenaming ? (
+                  <>
+                    <Input
+                      ref={renameInputRef}
+                      className="h-5 text-xs px-1 py-0 flex-1"
+                      value={renameName}
+                      onChange={(e) => setRenameName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleRename()
+                        if (e.key === "Escape") setRenameTarget(null)
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      disabled={renaming}
+                    />
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                      onClick={(e) => { e.stopPropagation(); handleRename() }}
+                      disabled={renaming || !renameName.trim()}
+                    >
+                      <Check className="w-3 h-3" />
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                      onClick={(e) => { e.stopPropagation(); setRenameTarget(null) }}
+                      disabled={renaming}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-xs truncate flex-1">{file.name}</span>
+                    {!file.isDirectory && (
+                      <span className="text-[10px] text-muted-foreground shrink-0">{formatSize(file.size)}</span>
+                    )}
+                    {!file.isDirectory && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-5 w-5 p-0 text-muted-foreground hover:text-foreground shrink-0"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          }
+                        >
+                          <Ellipsis className="w-3 h-3" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" side="bottom" className="w-auto min-w-[140px]">
+                          <DropdownMenuItem className="text-sm" onClick={() => openRename(file.name, filePath)}>
+                            <Pencil className="size-3.5" />
+                            Rename
+                          </DropdownMenuItem>
+                          <DropdownMenuItem className="text-sm" onClick={() => openMoveDialog(file.name, filePath)}>
+                            <FolderInput className="size-3.5" />
+                            Move to folder
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem className="text-sm" variant="destructive" onClick={() => setDeleteTarget({ name: file.name, path: filePath })}>
+                            <Trash2 className="size-3.5" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
         </div>
       )}
 
@@ -227,6 +540,85 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
             <AlertDialogCancel variant="outline" onClick={() => setDeleteTarget(null)}>Cancel</AlertDialogCancel>
             <AlertDialogAction variant="destructive" disabled={deleting} onClick={handleDelete}>
               {deleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      {/* Move dialog */}
+      <AlertDialog open={!!moveTarget} onOpenChange={(open) => { if (!open) setMoveTarget(null) }}>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia className="bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary">
+              <FolderInput className="w-5 h-5" />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Move file</AlertDialogTitle>
+            <AlertDialogDesc>
+              Move <strong>{moveTarget?.name}</strong> to:
+            </AlertDialogDesc>
+          </AlertDialogHeader>
+
+          {/* Destination breadcrumb */}
+          <div className="flex items-center gap-0.5 min-h-[20px] flex-wrap px-1">
+            {moveDestBreadcrumbs.map((segment, i) => (
+              <React.Fragment key={i}>
+                {i > 0 && <ChevronRight className="w-2.5 h-2.5 text-muted-foreground shrink-0" />}
+                <button
+                  className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-0.5 rounded"
+                  onClick={() => {
+                    const newPath = i === 0 ? "/" : "/" + moveDest.split("/").filter(Boolean).slice(0, i).join("/")
+                    setMoveDest(newPath)
+                    loadMoveFolders(newPath)
+                  }}
+                >
+                  {segment === "/" ? "root" : segment}
+                </button>
+              </React.Fragment>
+            ))}
+          </div>
+
+          {/* Folder list */}
+          <div className="border rounded-md max-h-[200px] overflow-y-auto">
+            {moveLoading ? (
+              <div className="space-y-1 p-2">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Skeleton className="w-3.5 h-3.5 rounded-sm shrink-0" />
+                    <Skeleton className="h-3 flex-1" style={{ maxWidth: `${50 + Math.random() * 30}%` }} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-0.5 p-1">
+                {moveDest !== "/" && (
+                  <button
+                    className="flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/50 text-left"
+                    onClick={navigateMoveUp}
+                  >
+                    <Folder className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">..</span>
+                  </button>
+                )}
+                {moveFolders.length === 0 && moveDest === "/" && (
+                  <p className="text-[10px] text-muted-foreground text-center py-2">No folders</p>
+                )}
+                {moveFolders.map((folder) => (
+                  <button
+                    key={folder.name}
+                    className="flex items-center gap-2 w-full px-2 py-1 rounded-md hover:bg-muted/50 text-left"
+                    onClick={() => navigateMoveDest(folder.name)}
+                  >
+                    <Folder className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                    <span className="text-xs truncate">{folder.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <AlertDialogFooter>
+            <AlertDialogCancel variant="outline" onClick={() => setMoveTarget(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction disabled={moving} onClick={handleMove}>
+              {moving ? "Moving..." : "Move here"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
