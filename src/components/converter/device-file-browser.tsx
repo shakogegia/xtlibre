@@ -5,7 +5,8 @@ import {
   AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogDescription as AlertDialogDesc,
   AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog"
-import { Folder, FileText, BookOpen, Trash2, Loader2, ChevronRight, RefreshCw } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Folder, FileText, BookOpen, Trash2, ChevronRight, RefreshCw } from "lucide-react"
 
 interface DeviceFile {
   name: string
@@ -144,8 +145,14 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
 
       {/* File list */}
       {loading ? (
-        <div className="flex items-center justify-center py-6">
-          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+        <div className="space-y-1">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex items-center gap-2 px-2 py-1">
+              <Skeleton className="w-3.5 h-3.5 rounded-sm shrink-0" />
+              <Skeleton className="h-3 flex-1" style={{ maxWidth: `${60 + Math.random() * 30}%` }} />
+              <Skeleton className="h-2.5 w-10 shrink-0" />
+            </div>
+          ))}
         </div>
       ) : error ? (
         <div className="text-center py-4">
