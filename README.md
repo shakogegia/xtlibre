@@ -1,96 +1,82 @@
 # XTLibre
 
-A self-hosted companion app for [Xteink](https://xteink.com) and [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) e-readers. Convert EPUBs to XTC format, manage your library, send books wirelessly to your device, and browse device files — all from your browser.
+XTLibre is a self-hosted companion app for [Xteink](https://xteink.com) and [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) e-readers. It turns EPUB files into device-ready `XTC` packages, stores them in a local library, exposes them over OPDS, and can send them straight to a reader over WiFi.
 
-<img width="1418" height="959" alt="Xnip2026-03-27_22-32-46" src="https://github.com/user-attachments/assets/ca2cee9f-2074-4068-a2d5-59fd6f19b833" />
+It is built for people who want a practical replacement for manual USB workflows: drop in a book, tune the rendering for e-ink, save it to your library, then download or transfer it to the device.
 
+https://github.com/user-attachments/assets/4fdc84e8-ef6f-4507-b719-63970012ea24
 
-## Features
+## Why XTLibre
 
-### Converter
-- **Device preview** — realistic on-screen frames for Xteink X4 (480×800) and X3 (528×792)
-- **Configurable rendering** — font family, size, weight, line spacing, margins, text alignment, and hyphenation
-- **Custom fonts** — upload TTF/OTF fonts for rendering
-- **Landscape mode** — rotate the preview for wide-format reading
-- **Floyd–Steinberg dithering** — 1-bit and 2-bit quantization modes for e-ink optimization
-- **Progress bar** — configurable progress bar with chapter marks, page info, and dither control
-- **Batch export** — export a single page or all pages at once as `.xtc`
-- **Page scrubber** — quickly jump through long books
+- Built around Xteink/CrossPoint instead of generic EPUB reading
+- Self-hosted, with your library and settings stored on your own server
+- Real conversion controls for e-ink output, not just file sync
+- OPDS support so devices can browse your generated books directly
+- Wireless transfer to the device without leaving the browser
 
-### Library & Calibre
-- **Save to Library** — save converted XTC files and source EPUBs to the server for later access
-- **Calibre-Web integration** — browse and download EPUBs from your [Calibre-Web](https://github.com/janeczku/calibre-web) or [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) library via OPDS
-- **OPDS catalog** — your Xteink device can browse and download XTC files directly at `/opds`
+## What It Does
 
-### Device
-- **Send to device** — upload XTC files wirelessly to your Xteink/CrossPoint e-reader over WebSocket
-- **Auto-discovery** — scan for devices on your local network via UDP broadcast
-- **File browser** — browse, navigate, and delete files on your device
-- **Two transfer modes** — Direct (browser → device) for remote servers, Relay (server → device) for same-network setups
-- **Device info** — view firmware version, WiFi signal, memory, and uptime
+### EPUB to XTC conversion
 
-### General
-- **Persistent settings** — options are saved server-side to SQLite
-- **Authentication** — login page with JWT session cookies; HTTP Basic Auth for OPDS
-- **Docker support** — single-container deployment with persistent storage
+- Render EPUB files for Xteink X4 and X3 screen sizes
+- Tune font family, size, weight, margins, line height, alignment, and hyphenation
+- Upload custom TTF/OTF fonts
+- Preview the result in a device-style frame before exporting
+- Generate standard `XTC` output or high-quality `XTCH` output
+- Apply 1-bit / 2-bit e-ink quantization and Floyd-Steinberg dithering
+- Add a configurable reading progress bar with chapter markers and page info
 
-## Supported devices
+### Library and catalog
 
-| Device     | Resolution |
-| ---------- | ---------- |
-| Xteink X4  | 480 × 800  |
-| Xteink X3  | 528 × 792  |
+- Save source EPUB files and generated XTC files on the server
+- Edit title and author metadata after import
+- Re-open saved EPUBs for reconversion
+- Publish generated books through an authenticated OPDS feed at `/opds`
+- Browse and import books from Calibre-Web or any OPDS-compatible source
 
-## Getting started
+### Device workflow
 
-```bash
-pnpm install
-pnpm dev
-```
+- Discover compatible devices on the local network
+- Test connectivity before sending books
+- Transfer books wirelessly in direct or relay mode
+- Browse files on the device from the web UI
+- View device status such as firmware, WiFi mode, signal, memory, and uptime
 
-Open [http://localhost:3000](http://localhost:3000), drop an EPUB file, and start converting.
+## Supported Devices
 
-### Authentication
+| Device | Resolution |
+| --- | --- |
+| Xteink X4 | 480 x 800 |
+| Xteink X3 | 528 x 792 |
 
-XTLibre requires authentication. Set the following environment variables:
+## Typical Flow
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `AUTH_USERNAME` | Yes | Login username |
-| `AUTH_PASSWORD` | Yes | Login password |
+1. Open XTLibre in the browser and log in.
+2. Drop in an EPUB or import one from your OPDS / Calibre catalog.
+3. Tune typography and e-ink rendering while previewing pages live.
+4. Generate an `XTC` or `XTCH` file and store it in the library.
+5. Download it, browse it through OPDS, or send it directly to the device.
 
-For local development:
+## Quick Start
 
-```bash
-AUTH_USERNAME=admin AUTH_PASSWORD=secret pnpm dev
-```
+### Docker
 
-The web UI uses a session cookie after login. The OPDS endpoint (`/opds`) also supports HTTP Basic Auth so Xteink devices can authenticate directly.
-
-### Calibre-Web / OPDS
-
-Switch to the **Library** tab and enter your Calibre-Web server URL and credentials when prompted. XTLibre connects via the OPDS 1.2 catalog feed to browse your library and download EPUBs directly — no file transfer needed.
-
-Works with any OPDS-compatible server, including:
-- [Calibre-Web](https://github.com/janeczku/calibre-web)
-- [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated)
-
-## Self-hosting with Docker
-
-The quickest way to get started is with the pre-built image from Docker Hub:
+The fastest way to run XTLibre is with Docker:
 
 ```bash
 docker run -d \
   --name xtlibre \
   -p 3000:3000 \
-  -e PUBLIC_URL=https://books.example.com \
   -e AUTH_USERNAME=admin \
   -e AUTH_PASSWORD=changeme \
+  -e PUBLIC_URL=http://localhost:3000 \
   -v xtlibre-data:/data \
   shakogegia/xtlibre
 ```
 
-Or with `docker-compose.yml`:
+Then open [http://localhost:3000](http://localhost:3000).
+
+### Docker Compose
 
 ```yaml
 services:
@@ -99,9 +85,9 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - PUBLIC_URL=https://books.example.com
-      - AUTH_USERNAME=admin
-      - AUTH_PASSWORD=changeme
+      AUTH_USERNAME: admin
+      AUTH_PASSWORD: changeme
+      PUBLIC_URL: http://localhost:3000
     volumes:
       - xtlibre-data:/data
     restart: unless-stopped
@@ -114,59 +100,91 @@ volumes:
 docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to use XTLibre. Converted XTC files are saved to the library and can be sent to the device wirelessly or served over OPDS.
-
-### Sending to device
-
-Go to the **Device** tab to connect to your e-reader. On your device, enter **File Transfer** and select **Join a Network** or **Calibre Wireless**.
-
-- **Direct mode** — your browser connects to the device directly. Use when the server is remote (e.g. Docker on a VPS).
-- **Relay mode** — the server sends files to the device. Use when both are on the same LAN.
-
-You can also enter `crosspoint.local` as the hostname if your network supports mDNS.
-
-### OPDS endpoint
-
-Point your Xteink device to `http://<your-server>:3000/opds` to browse and download XTC files from your library.
-
-The endpoint requires HTTP Basic Auth using the same `AUTH_USERNAME` and `AUTH_PASSWORD` credentials.
-
-Set `PUBLIC_URL` to the externally reachable address (e.g. `https://books.example.com`) so that OPDS feed links use the correct host. When omitted, URLs are derived from the incoming request.
-
-### Building from source
-
-If you want to build the image yourself:
+## Local Development
 
 ```bash
-make build
-make run
+pnpm install
+AUTH_USERNAME=admin AUTH_PASSWORD=secret pnpm dev
 ```
 
-| Command      | Description                        |
-| ------------ | ---------------------------------- |
-| `make build` | Build the Docker image             |
-| `make run`   | Build and start the container      |
-| `make stop`  | Stop and remove the container      |
-| `make logs`  | Tail container logs                |
-| `make shell` | Open a shell in the container      |
-| `make push`  | Tag and push to Docker Hub         |
-| `make clean` | Stop container, remove image/volume|
+Open [http://localhost:3000](http://localhost:3000).
 
-Override defaults with environment variables:
+## Configuration
+
+XTLibre requires authentication. These environment variables matter in practice:
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `AUTH_USERNAME` | Yes | Login username for the web UI and OPDS basic auth |
+| `AUTH_PASSWORD` | Yes | Login password and signing secret for sessions / download tokens |
+| `PUBLIC_URL` | Recommended | Public base URL used when building OPDS links |
+| `DATA_DIR` | No | Storage directory for the SQLite DB, uploaded fonts, EPUBs, and XTC files |
+
+### Data stored on disk
+
+By default XTLibre stores persistent data in `./data` locally or `/data` in Docker:
+
+- `library.db` for metadata and saved settings
+- `library/` for EPUB, XTC, and XTCH files
+- `fonts/` for uploaded custom fonts
+
+Mount that directory as a volume in production.
+
+## Using OPDS and Calibre-Web
+
+XTLibre exposes an authenticated OPDS catalog at `/opds`. Add that URL to your e-reader to browse and download generated books from your XTLibre library.
+
+The app can also connect to Calibre-Web, Calibre-Web-Automated, or another OPDS-compatible source. Configure the server from the `Calibre` tab, browse the catalog in the UI, and import EPUBs directly into XTLibre.
+
+## Sending Books to the Device
+
+Open the `Device` tab, put the reader into `File Transfer`, and connect it over WiFi.
+
+XTLibre supports two transfer modes:
+
+- `Direct`: the browser connects to the device directly
+- `Relay`: the XTLibre server connects to the device and streams the file
+
+Use `Relay` when XTLibre is running on the same LAN as the e-reader. Use `Direct` when the browser can reach the device directly.
+
+### Network note
+
+Direct mode is currently intended for HTTP/local-network usage. If you access XTLibre over HTTPS, use relay mode instead.
+
+## Building From Source
 
 ```bash
-make run PORT=8080                          # custom port
-make push DOCKER_REPO=shakogegia/xtlibre   # Docker Hub repo
+pnpm build
+pnpm start
 ```
 
-## Tech stack
+The repository also includes convenience `make` targets:
 
-- [Next.js 16](https://nextjs.org) (App Router) + React 19 + TypeScript
-- [Tailwind CSS 4](https://tailwindcss.com)
-- [shadcn/ui](https://ui.shadcn.com) (base-nova) on @base-ui/react
-- [CREngine WASM](https://github.com/nickelc/crengine-wasm) for EPUB rendering
-- [SQLite](https://github.com/WiseLibs/better-sqlite3) for library metadata
-- Web Worker for Floyd–Steinberg dithering
+| Command | Description |
+| --- | --- |
+| `make dev` | Run the development server |
+| `make build` | Build the Docker image |
+| `make run` | Build and start the container |
+| `make stop` | Stop and remove the container |
+| `make logs` | Tail container logs |
+| `make shell` | Open a shell inside the container |
+| `make push` | Build and push the multi-arch image |
+| `make clean` | Remove the local image and volume |
+
+When using `make run`, pass the required auth env vars:
+
+```bash
+make run AUTH_USERNAME=admin AUTH_PASSWORD=changeme
+```
+
+## Tech Stack
+
+- Next.js 16 with React 19 and TypeScript
+- Tailwind CSS 4
+- SQLite via `better-sqlite3`
+- CREngine WASM for EPUB layout and rendering
+- Web Workers for image processing and dithering
+- WebSocket and HTTP APIs for device communication
 
 ## License
 
