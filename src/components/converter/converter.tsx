@@ -25,6 +25,7 @@ import {
   fetchFeed, downloadEpub,
 } from "@/lib/opds"
 import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
+import { uploadToDevice, DeviceError } from "@/lib/device-client"
 import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
@@ -95,6 +96,11 @@ export function Converter({
     file_size: number | null; created_at: string; device_type: string | null; epub_filename: string | null
   }>>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
+
+  // Device transfer state
+  const [transferring, setTransferring] = useState(false)
+  const [transferProgress, setTransferProgress] = useState<{ sent: number; total: number; filename: string } | null>(null)
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   // Hydrate client-only state from localStorage after mount (avoids SSR mismatch)
   useEffect(() => {
@@ -315,12 +321,14 @@ export function Converter({
       if (res.ok) {
         const books = await res.json()
         setLibraryBooks(books)
+        return books as typeof libraryBooks
       }
     } catch (err) {
       console.error("Failed to fetch library:", err)
     } finally {
       setLibraryLoading(false)
     }
+    return null
   }, [])
 
   useEffect(() => {
@@ -591,6 +599,115 @@ export function Converter({
     }
   }, [])
 
+  const cancelTransfer = useCallback(() => {
+    abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    setTransferring(false)
+    setTransferProgress(null)
+  }, [])
+
+  const sendToDevice = useCallback(async (bookId: string) => {
+    const settings = sRef.current
+    if (!settings.deviceHost) {
+      toast.error("No device configured. Go to the Device tab to set up your e-reader.")
+      return
+    }
+
+    const book = libraryBooks.find(b => b.id === bookId)
+    if (!book?.filename) return
+
+    const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
+    const filename = book.title.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 50) + ext
+    const toastId = `send-${bookId}`
+
+    setTransferring(true)
+    setTransferProgress({ sent: 0, total: 0, filename: book.title })
+    toast.loading(`Sending "${book.title}" to device...`, { id: toastId })
+
+    try {
+      if (settings.deviceTransferMode === "relay") {
+        // Relay mode: server streams to device, progress via SSE
+        const resp = await fetch("/api/device/send", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookId,
+            host: settings.deviceHost,
+            port: settings.devicePort,
+            uploadPath: settings.deviceUploadPath,
+          }),
+        })
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ error: "Send failed" }))
+          throw new DeviceError(err.error || "Send failed")
+        }
+
+        const reader = resp.body?.getReader()
+        const decoder = new TextDecoder()
+        if (!reader) throw new DeviceError("No response stream")
+
+        let buffer = ""
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+
+          const lines = buffer.split("\n\n")
+          buffer = lines.pop() || ""
+
+          for (const line of lines) {
+            const match = line.match(/^data: (.+)$/m)
+            if (!match) continue
+            const event = JSON.parse(match[1])
+
+            if (event.type === "progress") {
+              setTransferProgress({ sent: event.sent, total: event.total, filename: book.title })
+            } else if (event.type === "done") {
+              setTransferring(false)
+              setTransferProgress(null)
+              toast.success(`Sent "${book.title}" to device`, { id: toastId, duration: 4000 })
+              return
+            } else if (event.type === "error") {
+              throw new DeviceError(event.message)
+            }
+          }
+        }
+      } else {
+        // Direct mode: browser fetches file, then streams to device via WebSocket
+        const abortController = new AbortController()
+        abortControllerRef.current = abortController
+
+        const resp = await fetch(`/api/library/${bookId}`)
+        if (!resp.ok) throw new DeviceError("Failed to fetch file from server")
+        const data = await resp.arrayBuffer()
+
+        setTransferProgress({ sent: 0, total: data.byteLength, filename: book.title })
+
+        await uploadToDevice({
+          host: settings.deviceHost,
+          port: settings.devicePort,
+          uploadPath: settings.deviceUploadPath,
+          filename,
+          data,
+          onProgress: (sent, total) => {
+            setTransferProgress({ sent, total, filename: book.title })
+          },
+          signal: abortController.signal,
+        })
+
+        toast.success(`Sent "${book.title}" to device`, { id: toastId, duration: 4000 })
+      }
+    } catch (err) {
+      const message = err instanceof DeviceError ? err.message : "Transfer failed"
+      toast.error(message, { id: toastId, duration: 4000 })
+    } finally {
+      setTransferring(false)
+      setTransferProgress(null)
+      abortControllerRef.current = null
+    }
+  }, [libraryBooks])
+
   const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
     const formData = new FormData()
     const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
@@ -758,21 +875,33 @@ export function Converter({
       // Save XTC to library
       toast.loading("Saving to library...", { id: toastId })
       await saveToLibrary(buf, metaRef.current, settings.deviceType)
-      await fetchLibraryBooks()
+      const updatedBooks = await fetchLibraryBooks()
 
       // Restore preview to current page
       ren.goToPage(currentPage)
       renderPreview()
 
       const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
-      toast.success(`Generated ${pageCount} pages in ${totalTime}s`, { id: toastId, duration: 4000 })
+      const justSaved = updatedBooks?.[0]
+      if (justSaved?.filename && sRef.current.deviceHost) {
+        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, {
+          id: toastId,
+          duration: 8000,
+          action: {
+            label: "Send to device",
+            onClick: () => sendToDevice(justSaved.id),
+          },
+        })
+      } else {
+        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, { id: toastId, duration: 4000 })
+      }
     } catch (err) {
       console.error("Generate XTC error:", err)
       toast.error("Generation failed", { id: toastId, duration: 4000 })
     } finally {
       processingRef.current = false; setProcessing(false)
     }
-  }, [saveToLibrary, fetchLibraryBooks, renderPreview])
+  }, [saveToLibrary, fetchLibraryBooks, renderPreview, sendToDevice])
 
   // ── Initialization ──
 
@@ -923,6 +1052,8 @@ export function Converter({
 
   // ── Render ──
 
+  const deviceConfigured = !!s.deviceHost
+
   const dims = getScreenDimensions(s.deviceType, s.orientation)
 
   return (
@@ -952,6 +1083,11 @@ export function Converter({
         openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
         deleteLibraryBook={deleteLibraryBook}
         updateLibraryBook={updateLibraryBook}
+        sendToDevice={sendToDevice}
+        deviceConfigured={deviceConfigured}
+        transferring={transferring}
+        transferProgress={transferProgress}
+        cancelTransfer={cancelTransfer}
       />
 
       {/* Content area */}
