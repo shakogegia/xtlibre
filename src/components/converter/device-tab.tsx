@@ -175,7 +175,7 @@ export function DeviceTab({
               <AlertDescription className="text-[10px]">
                 <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
                   <li>On your device, go to <strong>File Transfer</strong></li>
-                  <li>Connect to a <strong>WiFi network</strong></li>
+                  <li>Select <strong>Join a Network</strong> or <strong>Calibre Wireless</strong></li>
                 </ol>
                 <p className="mt-1.5 text-muted-foreground">
                   {s.deviceTransferMode === "direct"
