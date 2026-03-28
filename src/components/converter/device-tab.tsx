@@ -190,11 +190,12 @@ export function DeviceTab({
           {/* Primary action: Scan */}
           <Button
             variant="outline"
-            className="w-full h-9 text-xs"
+            size="sm"
+            className="w-full text-[11px]"
             onClick={handleScan}
             disabled={scanning}
           >
-            {scanning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Search className="w-3.5 h-3.5 mr-1.5" />}
+            {scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
             {scanning ? "Scanning for devices..." : "Scan for device"}
           </Button>
 
