@@ -6,13 +6,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { host, port = 80, path } = body
+    const { host, path } = body
 
     if (!host || !path) {
       return Response.json({ error: "host and path are required" }, { status: 400 })
     }
 
-    const url = `http://${host}:${port}/delete`
+    // Device HTTP server always runs on port 80
+    const url = `http://${host}/delete`
     const params = new URLSearchParams({ path, type: "file" })
     const resp = await fetch(url, {
       method: "POST",

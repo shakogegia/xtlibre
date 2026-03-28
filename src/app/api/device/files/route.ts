@@ -6,13 +6,14 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json()
-    const { host, port = 80, path = "/" } = body
+    const { host, path = "/" } = body
 
     if (!host) {
       return Response.json({ error: "host is required" }, { status: 400 })
     }
 
-    const url = `http://${host}:${port}/api/files?path=${encodeURIComponent(path)}`
+    // Device HTTP server always runs on port 80
+    const url = `http://${host}/api/files?path=${encodeURIComponent(path)}`
     const resp = await fetch(url, { signal: AbortSignal.timeout(10000) })
 
     if (!resp.ok) {
