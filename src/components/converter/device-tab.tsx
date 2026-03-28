@@ -241,6 +241,11 @@ export function DeviceTab({
                 ? "Your browser sends files to the device. Both must be on the same WiFi."
                 : "The server sends files to the device. Use when the server is on the same network as the device."}
             </p>
+            {s.deviceTransferMode === "direct" && typeof window !== "undefined" && window.location.protocol === "https:" && (
+              <p className="text-[10px] text-destructive mt-1">
+                Direct mode is not available over HTTPS. Switch to Relay mode or access XTLibre over HTTP.
+              </p>
+            )}
           </div>
 
           {/* Primary action: Scan */}

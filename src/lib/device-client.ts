@@ -34,8 +34,19 @@ export class DeviceError extends Error {
 
 const CHUNK_SIZE = 2048 // Device firmware buffer limit (matches Calibre plugin cap)
 
+function checkMixedContent(): void {
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    throw new DeviceError(
+      "Cannot connect to device: your browser blocks plain WebSocket (ws://) connections from HTTPS pages. " +
+      "Use Relay mode instead, or access XTLibre over HTTP."
+    )
+  }
+}
+
 export async function uploadToDevice(options: DeviceUploadOptions): Promise<void> {
   const { host, port, uploadPath, filename, data, onProgress, signal } = options
+
+  checkMixedContent()
 
   return new Promise<void>((resolve, reject) => {
     if (signal?.aborted) {
@@ -143,6 +154,10 @@ export async function uploadToDevice(options: DeviceUploadOptions): Promise<void
 }
 
 export async function testDeviceConnection(host: string, port: number): Promise<boolean> {
+  if (typeof window !== "undefined" && window.location.protocol === "https:") {
+    return false
+  }
+
   return new Promise<boolean>((resolve) => {
     const ws = new WebSocket(`ws://${host}:${port}/`)
     const timeout = setTimeout(() => {
