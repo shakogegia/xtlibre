@@ -3,6 +3,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
 import { LibraryTab } from "@/components/converter/library-tab"
+import { DeviceTab } from "@/components/converter/device-tab"
 import {
   type Settings, type BookMetadata, type TocItem, type Renderer,
 } from "@/lib/types"
@@ -64,6 +65,13 @@ interface SidebarProps {
   downloadXtc: (bookId: string) => void
   deleteLibraryBook: (bookId: string) => void
   updateLibraryBook: (bookId: string, title: string, author: string | null) => void
+
+  // Device
+  sendToDevice: (bookId: string) => void
+  deviceConfigured: boolean
+  transferring: boolean
+  transferProgress: { sent: number; total: number; filename: string } | null
+  cancelTransfer: () => void
 }
 
 export function Sidebar({
@@ -82,6 +90,8 @@ export function Sidebar({
   opdsBrowse, opdsBack, opdsDoSearch, opdsImportBook,
   // Library
   activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
+  // Device
+  sendToDevice, deviceConfigured, transferring, transferProgress, cancelTransfer,
 }: SidebarProps) {
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
@@ -91,6 +101,7 @@ export function Sidebar({
             <TabsTrigger value="library" className="text-[12px]">Library</TabsTrigger>
             <TabsTrigger value="options" className="text-[12px]">Options</TabsTrigger>
             <TabsTrigger value="calibre" className="text-[12px]">Calibre</TabsTrigger>
+            <TabsTrigger value="device" className="text-[12px]">Device</TabsTrigger>
           </TabsList>
         </div>
 
@@ -103,6 +114,9 @@ export function Sidebar({
             openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
             deleteLibraryBook={deleteLibraryBook}
             updateLibraryBook={updateLibraryBook}
+            sendToDevice={sendToDevice}
+            deviceConfigured={deviceConfigured}
+            transferring={transferring}
           />
         </TabsContent>
 
@@ -128,6 +142,15 @@ export function Sidebar({
             setOpdsError={setOpdsError}
             opdsBrowse={opdsBrowse} opdsBack={opdsBack}
             opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
+          />
+        </TabsContent>
+
+        <TabsContent value="device" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
+          <DeviceTab
+            s={s} update={update}
+            transferring={transferring}
+            transferProgress={transferProgress}
+            cancelTransfer={cancelTransfer}
           />
         </TabsContent>
       </Tabs>

@@ -36,12 +36,16 @@ interface LibraryTabProps {
   downloadXtc: (bookId: string) => void
   deleteLibraryBook: (bookId: string) => void
   updateLibraryBook: (bookId: string, title: string, author: string | null) => void
+  sendToDevice: (bookId: string) => void
+  deviceConfigured: boolean
+  transferring: boolean
 }
 
 export function LibraryTab({
   fileInputRef, addFiles,
   dragOver, setDragOver,
   opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
+  sendToDevice, deviceConfigured, transferring,
 }: LibraryTabProps) {
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
@@ -168,6 +172,17 @@ export function LibraryTab({
                   {book.filename && (
                     <Button variant="ghost" size="sm" className="h-6 w-6 p-0" title="Download XTC" onClick={() => downloadXtc(book.id)}>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    </Button>
+                  )}
+                  {book.filename && (
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-6 w-6 p-0"
+                      title={deviceConfigured ? "Send to device" : "Configure device in Device tab"}
+                      disabled={!deviceConfigured || transferring}
+                      onClick={() => sendToDevice(book.id)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4z"/></svg>
                     </Button>
                   )}
                   <AlertDialog>
