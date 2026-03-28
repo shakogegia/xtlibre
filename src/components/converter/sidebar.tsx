@@ -1,4 +1,5 @@
 import React from "react"
+import { cn } from "@/lib/utils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
@@ -10,6 +11,7 @@ import {
 import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 
 interface SidebarProps {
+  className?: string
   initialTab: string
   opdsUrl: string | null
 
@@ -75,6 +77,7 @@ interface SidebarProps {
 }
 
 export function Sidebar({
+  className,
   initialTab, opdsUrl,
   // Files
   fileInputRef, addFiles, dragOver, setDragOver,
@@ -94,7 +97,7 @@ export function Sidebar({
   sendToDevice, deviceConfigured, transferring, transferProgress, cancelTransfer,
 }: SidebarProps) {
   return (
-    <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
+    <div className={cn("w-[360px] border-r border-border/50 flex flex-col bg-card/50", className)}>
       <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
         <div className="flex items-center px-4 py-2 border-b border-border/50">
           <TabsList className="w-full !h-7 p-0.5">

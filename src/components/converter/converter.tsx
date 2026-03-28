@@ -6,6 +6,7 @@ import { Sidebar } from "@/components/converter/sidebar"
 import { CalibreDialog } from "@/components/converter/calibre-dialog"
 import { Toolbar } from "@/components/converter/toolbar"
 import { DevicePreview } from "@/components/converter/device-preview"
+import { MobileLayout } from "@/components/converter/mobile-layout"
 import {
   FONT_FAMILIES, ARABIC_FONTS,
 } from "@/lib/config"
@@ -1073,8 +1074,10 @@ export function Converter({
 
   return (
     <DeviceProvider settings={s} updateSettings={update}>
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen flex-col md:flex-row bg-background">
+      {/* Desktop sidebar — hidden on mobile */}
       <Sidebar
+        className="hidden md:flex"
         initialTab={initialTab}
         opdsUrl={opdsUrl}
         fileInputRef={fileInputRef}
@@ -1106,9 +1109,8 @@ export function Converter({
         cancelTransfer={cancelTransfer}
       />
 
-      {/* Content area */}
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Toolbar */}
+      {/* Desktop content area — hidden on mobile */}
+      <div className="hidden md:flex flex-1 flex-col min-w-0" style={{ "--preview-inset": "420px" } as React.CSSProperties}>
         <Toolbar
           bookLoaded={bookLoaded} page={page} pages={pages} meta={meta}
           prevPage={prevPage} nextPage={nextPage}
@@ -1116,7 +1118,6 @@ export function Converter({
           renderPreview={renderPreview}
         />
 
-        {/* Preview */}
         <DevicePreview
           canvasRef={canvasRef} s={s} deviceColor={deviceColor}
           bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
@@ -1124,6 +1125,54 @@ export function Converter({
           processing={processing} handleGenerateXtc={handleGenerateXtc}
         />
       </div>
+
+      {/* Mobile layout — hidden on desktop */}
+      <MobileLayout
+        className="flex md:hidden flex-1 flex-col"
+        initialTab={initialTab}
+        opdsUrl={opdsUrl}
+        fileInputRef={fileInputRef}
+        addFiles={addFiles} dragOver={dragOver} setDragOver={setDragOver}
+        s={s} meta={meta} toc={toc}
+        update={update} updateAndReformat={updateAndReformat} updateAndRender={updateAndRender}
+        flushReformat={flushReformat} flushRender={flushRender}
+        handleFontChange={handleFontChange} handleQualityChange={handleQualityChange}
+        handleHyphenationChange={handleHyphenationChange} handleHyphenLangChange={handleHyphenLangChange}
+        customFonts={customFonts} uploadCustomFont={uploadCustomFont} deleteCustomFont={deleteCustomFont}
+        renderPreview={renderPreview} rendererRef={rendererRef}
+        calibreConnected={calibreConnected} opdsFeed={opdsFeed}
+        opdsLoading={opdsLoading} opdsError={opdsError}
+        opdsSearch={opdsSearch} opdsNavStack={opdsNavStack}
+        opdsDownloading={opdsDownloading}
+        setOpdsSettingsOpen={setOpdsSettingsOpen} setOpdsSearch={setOpdsSearch}
+        setOpdsError={setOpdsError}
+        opdsBrowse={opdsBrowse} opdsBack={opdsBack}
+        opdsDoSearch={opdsDoSearch} opdsImportBook={opdsImportBook}
+        activeBookId={files[0]?.libraryBookId ?? null}
+        libraryBooks={libraryBooks} libraryLoading={libraryLoading}
+        openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
+        deleteLibraryBook={deleteLibraryBook}
+        updateLibraryBook={updateLibraryBook}
+        sendToDevice={sendToDevice}
+        deviceConfigured={deviceConfigured}
+        transferring={transferring}
+        transferProgress={transferProgress}
+        cancelTransfer={cancelTransfer}
+        canvasRef={canvasRef}
+        deviceColor={deviceColor}
+        bookLoaded={bookLoaded}
+        loading={loading}
+        loadingMsg={loadingMsg}
+        wasmReady={wasmReady}
+        page={page}
+        pages={pages}
+        goToPage={goToPage}
+        prevPage={prevPage}
+        nextPage={nextPage}
+        processing={processing}
+        handleGenerateXtc={handleGenerateXtc}
+        setDeviceColor={setDeviceColor}
+      />
 
       <CalibreDialog
         open={opdsSettingsOpen} onOpenChange={setOpdsSettingsOpen}
