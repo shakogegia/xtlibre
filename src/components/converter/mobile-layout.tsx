@@ -124,7 +124,6 @@ export function MobileLayout({
 }: MobileLayoutProps) {
   return (
     <Tabs
-      urlSync="view"
       defaultValue={initialTab}
       onValueChange={(v) => {
         if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse()
