@@ -204,12 +204,12 @@ export function MobileLayout({
         className="border-t border-border/50 bg-card"
         style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
       >
-        <TabsList className="w-full h-auto bg-transparent rounded-none p-0">
+        <TabsList variant="line" className="w-full rounded-none p-0 gap-0" style={{ height: "3.5rem" }}>
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
               key={value}
               value={value}
-              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-none h-auto text-muted-foreground data-active:text-primary data-active:bg-transparent data-active:shadow-none dark:data-active:bg-transparent dark:data-active:border-transparent"
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-none border-0 h-full text-muted-foreground data-active:text-primary data-active:bg-transparent data-active:shadow-none data-active:after:opacity-0 dark:data-active:bg-transparent dark:data-active:border-transparent [&_svg]:!size-5"
             >
               <Icon size={20} />
               <span className="text-[10px]">{label}</span>
