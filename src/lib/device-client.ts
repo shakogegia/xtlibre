@@ -74,10 +74,10 @@ export async function uploadToDevice(options: DeviceUploadOptions): Promise<void
       const msg = typeof event.data === "string" ? event.data : ""
 
       if (msg === "READY") {
-        let sent = 0
+        let queued = 0
         const sendNextChunk = () => {
           if (done) return
-          if (sent >= data.byteLength) return
+          if (queued >= data.byteLength) return
 
           // Backpressure: wait if the WebSocket buffer hasn't drained
           if (ws.bufferedAmount > CHUNK_SIZE * 8) {
@@ -85,17 +85,27 @@ export async function uploadToDevice(options: DeviceUploadOptions): Promise<void
             return
           }
 
-          const end = Math.min(sent + CHUNK_SIZE, data.byteLength)
-          const chunk = data.slice(sent, end)
+          const end = Math.min(queued + CHUNK_SIZE, data.byteLength)
+          const chunk = data.slice(queued, end)
           ws.send(chunk)
-          sent = end
-          onProgress?.(sent, data.byteLength)
+          queued = end
 
-          if (sent < data.byteLength) {
+          if (queued < data.byteLength) {
             setTimeout(sendNextChunk, 10)
           }
         }
         sendNextChunk()
+        return
+      }
+
+      // Device reports actual bytes received — use for accurate progress
+      if (msg.startsWith("PROGRESS:")) {
+        const parts = msg.slice(9).split(":")
+        const received = parseInt(parts[0], 10)
+        const total = parseInt(parts[1], 10)
+        if (!isNaN(received) && !isNaN(total)) {
+          onProgress?.(received, total)
+        }
         return
       }
 
