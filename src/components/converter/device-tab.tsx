@@ -11,6 +11,7 @@ import {
 import { Smartphone, Wifi, WifiOff, Search, Trash2, Loader2, Radio } from "lucide-react"
 import { type Settings } from "@/lib/types"
 import { type RememberedDevice } from "@/lib/device-client"
+import { DeviceFileBrowser } from "@/components/converter/device-file-browser"
 
 interface DeviceTabProps {
   s: Settings
@@ -183,7 +184,7 @@ export function DeviceTab({
           onValueChange={(v) => update({ deviceTransferMode: v as "direct" | "relay" })}
         >
           <SelectTrigger className="h-7 text-xs">
-            <SelectValue />
+            <SelectValue>{s.deviceTransferMode === "direct" ? "Direct (Browser)" : "Relay (Server)"}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectGroup>
@@ -250,6 +251,11 @@ export function DeviceTab({
             </div>
           </div>
         </>
+      )}
+
+      {/* File browser — shown when device is reachable */}
+      {s.deviceHost && connectionStatus === "reachable" && (
+        <DeviceFileBrowser host={s.deviceHost} port={s.devicePort} />
       )}
     </div>
   )
