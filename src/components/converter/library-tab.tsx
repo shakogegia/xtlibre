@@ -161,6 +161,7 @@ export function LibraryTab({
                       {book.filename && (
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
+                          {book.file_size != null && ` ${(book.file_size / (1024 * 1024)).toFixed(1)}MB`}
                         </Badge>
                       )}
                     </div>
