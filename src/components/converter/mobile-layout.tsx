@@ -132,7 +132,7 @@ export function MobileLayout({
       className={cn("flex-1 flex flex-col min-h-0", className)}
     >
       {/* Tab content area — fills available space above the bottom bar */}
-      <div className="flex-1 min-h-0 flex flex-col" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div className="flex-1 min-h-0 flex flex-col">
         <TabsContent value="library" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
           <LibraryTab
             fileInputRef={fileInputRef} addFiles={addFiles}
@@ -200,10 +200,7 @@ export function MobileLayout({
       </div>
 
       {/* Bottom navigation bar */}
-      <div
-        className="border-t border-border/50 bg-card"
-        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-      >
+      <div className="border-t border-border/50 bg-card">
         <TabsList variant="line" className="w-full rounded-none p-0 gap-0" style={{ height: "3.5rem" }}>
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
