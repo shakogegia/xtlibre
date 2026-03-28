@@ -354,6 +354,9 @@ export function DeviceTab({
                 <Wifi className="w-2.5 h-2.5 mr-0.5" /> Connected
               </Badge>
               <span className="text-[11px] font-medium flex-1">{s.deviceHost}</span>
+              <Badge variant="outline" className="h-auto text-[9px] px-1.5 py-0">
+                {s.deviceTransferMode === "direct" ? "Direct" : "Relay"}
+              </Badge>
               <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground" onClick={disconnect}>
                 Disconnect
               </Button>
