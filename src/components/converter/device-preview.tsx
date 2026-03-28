@@ -70,7 +70,7 @@ export function DevicePreview({
           className="relative"
           style={{
             aspectRatio: `${totalW} / ${totalH}`,
-            width: `min(${trueLifeW.toFixed(1)}px, calc(100vw - 420px), calc((100vh - 100px) * ${(totalW / totalH).toFixed(6)}))`,
+            width: `min(${trueLifeW.toFixed(1)}px, calc(100vw - var(--preview-inset, 32px)), calc((100vh - 100px) * ${(totalW / totalH).toFixed(6)}))`,
             background: dc.body,
             borderRadius: `${((bz.bodyRadius / totalW) * 100).toFixed(2)}% / ${((bz.bodyRadius / totalH) * 100).toFixed(2)}%`,
             boxShadow: `${dc.shadow}, ${dc.highlight}`,
