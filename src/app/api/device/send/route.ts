@@ -32,6 +32,12 @@ export async function POST(request: Request) {
   let deviceWs: WebSocket | null = null
   let done = false
 
+  // Listen for client disconnect (abort signal from fetch)
+  request.signal.addEventListener("abort", () => {
+    done = true
+    try { deviceWs?.close() } catch {}
+  })
+
   const stream = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder()

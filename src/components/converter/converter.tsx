@@ -26,6 +26,7 @@ import {
 } from "@/lib/opds"
 import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
 import { uploadToDevice, DeviceError } from "@/lib/device-client"
+import { DeviceProvider } from "@/contexts/device-context"
 import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
@@ -1071,6 +1072,7 @@ export function Converter({
   const dims = getScreenDimensions(s.deviceType, s.orientation)
 
   return (
+    <DeviceProvider settings={s} updateSettings={update}>
     <div className="flex h-screen bg-background">
       <Sidebar
         initialTab={initialTab}
@@ -1129,5 +1131,6 @@ export function Converter({
         opdsSaveSettings={opdsSaveSettings} opdsDisconnect={opdsDisconnect}
       />
     </div>
+    </DeviceProvider>
   )
 }
