@@ -79,6 +79,12 @@ export async function uploadToDevice(options: DeviceUploadOptions): Promise<void
           if (done) return
           if (sent >= data.byteLength) return
 
+          // Backpressure: wait if the WebSocket buffer hasn't drained
+          if (ws.bufferedAmount > CHUNK_SIZE * 8) {
+            setTimeout(sendNextChunk, 50)
+            return
+          }
+
           const end = Math.min(sent + CHUNK_SIZE, data.byteLength)
           const chunk = data.slice(sent, end)
           ws.send(chunk)
@@ -86,7 +92,7 @@ export async function uploadToDevice(options: DeviceUploadOptions): Promise<void
           onProgress?.(sent, data.byteLength)
 
           if (sent < data.byteLength) {
-            setTimeout(sendNextChunk, 0)
+            setTimeout(sendNextChunk, 10)
           }
         }
         sendNextChunk()
