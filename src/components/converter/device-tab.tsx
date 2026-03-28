@@ -5,11 +5,12 @@ import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertTitle, AlertDescription, AlertAction } from "@/components/ui/alert"
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible"
 import {
   Select, SelectTrigger, SelectValue,
   SelectContent, SelectGroup, SelectItem,
 } from "@/components/ui/select"
-import { Smartphone, Wifi, WifiOff, Search, Trash2, Loader2, Radio, Info, Signal, HardDrive, Clock } from "lucide-react"
+import { Smartphone, Wifi, WifiOff, Search, Trash2, Loader2, Radio, Info, HardDrive, Clock, ChevronDown, Settings2 } from "lucide-react"
 import { type Settings } from "@/lib/types"
 import { type RememberedDevice } from "@/lib/device-client"
 import { DeviceFileBrowser } from "@/components/converter/device-file-browser"
@@ -62,14 +63,14 @@ export function DeviceTab({
   const [connectionStatus, setConnectionStatus] = useState<"unknown" | "reachable" | "unreachable">("unknown")
   const [deviceInfo, setDeviceInfo] = useState<DeviceStatus | null>(null)
   const [infoDismissed, setInfoDismissed] = useState(false)
+  const [showManual, setShowManual] = useState(false)
 
   const rememberedDevices: RememberedDevice[] = useMemo(() => {
     try { return JSON.parse(s.rememberedDevices) } catch { return [] }
   }, [s.rememberedDevices])
 
-  const fetchDeviceStatus = useCallback(async (host: string, port: number) => {
+  const fetchDeviceStatus = useCallback(async (host: string, _port: number) => {
     try {
-      // Device HTTP server runs on port 80, not the WebSocket port
       const resp = await fetch(`/api/device/status?host=${encodeURIComponent(host)}&port=80`)
       const data: DeviceStatus = await resp.json()
       setDeviceInfo(data)
@@ -96,11 +97,10 @@ export function DeviceTab({
       if (data.devices?.length > 0) {
         const dev = data.devices[0]
         update({ deviceHost: dev.host, devicePort: dev.port })
-        setScanResult(`Found device at ${dev.host}:${dev.port}`)
-        // Auto-test connection after discovery
+        setScanResult(`Found at ${dev.host}`)
         await fetchDeviceStatus(dev.host, dev.port)
       } else {
-        setScanResult("No devices found. Make sure File Transfer is active on your device.")
+        setScanResult("No devices found. Is File Transfer active on your device?")
         setConnectionStatus("unknown")
       }
     } catch {
@@ -119,12 +119,10 @@ export function DeviceTab({
     setTesting(false)
   }, [s.deviceHost, s.devicePort, fetchDeviceStatus])
 
-  // Auto-scan on first mount if no device is configured
   useEffect(() => {
     if (!s.deviceHost) {
       handleScan()
     } else {
-      // If host is set, auto-test on mount
       fetchDeviceStatus(s.deviceHost, s.devicePort)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -150,219 +148,235 @@ export function DeviceTab({
     fetchDeviceStatus(dev.host, dev.port)
   }, [update, fetchDeviceStatus])
 
+  const disconnect = useCallback(() => {
+    update({ deviceHost: "" })
+    setConnectionStatus("unknown")
+    setDeviceInfo(null)
+    setScanResult(null)
+  }, [update])
+
   const progressPct = transferProgress
     ? Math.round((transferProgress.sent / transferProgress.total) * 100)
     : 0
 
   const isConnected = connectionStatus === "reachable"
+  const hasDevice = !!s.deviceHost
 
   return (
-    <div className="space-y-4">
-      {/* Setup info alert */}
-      {!infoDismissed && !isConnected && (
-        <Alert className="text-[11px]">
-          <Info className="w-3.5 h-3.5" />
-          <AlertTitle className="text-[11px]">Connect your Xteink</AlertTitle>
-          <AlertDescription className="text-[10px]">
-            <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
-              <li>On your device, go to <strong>File Transfer</strong></li>
-              <li>Connect to a <strong>WiFi network</strong></li>
-              <li>Note the <strong>IP address</strong> shown on screen</li>
-              <li>Make sure this computer is on the <strong>same network</strong></li>
-            </ol>
-            <p className="mt-1.5 text-muted-foreground">
-              Then click Scan below, or enter the IP address manually.
-            </p>
-          </AlertDescription>
-          <AlertAction>
-            <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setInfoDismissed(true)}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
-            </Button>
-          </AlertAction>
-        </Alert>
-      )}
-
-      {/* Connection */}
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          <Smartphone className="w-3.5 h-3.5 text-muted-foreground" />
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Device Connection</span>
-          <div className="flex-1" />
-          {isConnected && (
-            <Badge variant="outline" className="h-auto text-[9px] px-1.5 py-0 text-emerald-600 border-emerald-600/30">
-              <Wifi className="w-2.5 h-2.5 mr-0.5" /> Connected
-            </Badge>
-          )}
-          {connectionStatus === "unreachable" && (
-            <Badge variant="outline" className="h-auto text-[9px] px-1.5 py-0 text-destructive border-destructive/30">
-              <WifiOff className="w-2.5 h-2.5 mr-0.5" /> Unreachable
-            </Badge>
-          )}
-        </div>
-
-        <div className="grid grid-cols-[1fr_80px] gap-2">
-          <div className="space-y-1">
-            <Label htmlFor="device-host" className="text-[10px]">IP Address</Label>
-            <Input
-              id="device-host"
-              placeholder="192.168.4.1"
-              value={s.deviceHost}
-              onChange={(e) => { update({ deviceHost: e.target.value }); setConnectionStatus("unknown"); setDeviceInfo(null) }}
-              className="h-7 text-xs"
-            />
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="device-port" className="text-[10px]">WS Port</Label>
-            <Input
-              id="device-port"
-              type="number"
-              value={s.devicePort}
-              onChange={(e) => { update({ devicePort: parseInt(e.target.value) || 81 }); setConnectionStatus("unknown"); setDeviceInfo(null) }}
-              className="h-7 text-xs"
-            />
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <Label htmlFor="device-path" className="text-[10px]">Upload Path</Label>
-          <Input
-            id="device-path"
-            placeholder="/"
-            value={s.deviceUploadPath}
-            onChange={(e) => update({ deviceUploadPath: e.target.value })}
-            className="h-7 text-xs"
-          />
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-[11px] flex-1" onClick={handleScan} disabled={scanning}>
-            {scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
-            {scanning ? "Scanning..." : "Scan"}
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-[11px] flex-1" onClick={handleTestConnection} disabled={testing || !s.deviceHost}>
-            {testing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Radio className="w-3 h-3 mr-1" />}
-            {testing ? "Testing..." : "Test"}
-          </Button>
-          <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={saveDevice} disabled={!s.deviceHost} title="Remember this device">
-            +
-          </Button>
-        </div>
-
-        {scanResult && (
-          <p className="text-[10px] text-muted-foreground">{scanResult}</p>
-        )}
-      </div>
-
-      {/* Device info card — shown when connected and have status data */}
-      {isConnected && deviceInfo?.version && (
+    <div className="space-y-3">
+      {/* ── NOT CONNECTED STATE ── */}
+      {!isConnected && (
         <>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-border/50" />
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Device Info</span>
-            <div className="flex-1 h-px bg-border/50" />
-          </div>
-
-          <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">CrossPoint</span>
-              <span className="text-[10px] font-medium">v{deviceInfo.version}</span>
-            </div>
-            {deviceInfo.mode && (
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Wifi className="w-2.5 h-2.5" /> Network
-                </span>
-                <span className="text-[10px] font-medium">
-                  {deviceInfo.mode === "AP" ? "Access Point" : "WiFi"}
-                  {deviceInfo.rssi != null && deviceInfo.rssi !== 0 && (
-                    <span className="text-muted-foreground ml-1">({signalLabel(deviceInfo.rssi)})</span>
-                  )}
-                </span>
-              </div>
-            )}
-            {deviceInfo.freeHeap != null && (
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <HardDrive className="w-2.5 h-2.5" /> Free Memory
-                </span>
-                <span className="text-[10px] font-medium">{formatBytes(deviceInfo.freeHeap)}</span>
-              </div>
-            )}
-            {deviceInfo.uptime != null && (
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <Clock className="w-2.5 h-2.5" /> Uptime
-                </span>
-                <span className="text-[10px] font-medium">{formatUptime(deviceInfo.uptime)}</span>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* Separator */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1 h-px bg-border/50" />
-        <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Mode</span>
-        <div className="flex-1 h-px bg-border/50" />
-      </div>
-
-      {/* Transfer mode */}
-      <div className="space-y-1.5">
-        <Label className="text-[10px]">Transfer Mode</Label>
-        <Select
-          value={s.deviceTransferMode}
-          onValueChange={(v) => update({ deviceTransferMode: v as "direct" | "relay" })}
-        >
-          <SelectTrigger className="h-7 text-xs">
-            <SelectValue>{s.deviceTransferMode === "direct" ? "Direct (Browser)" : "Relay (Server)"}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="direct" className="text-xs">Direct (Browser)</SelectItem>
-              <SelectItem value="relay" className="text-xs">Relay (Server)</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <p className="text-[10px] text-muted-foreground">
-          {s.deviceTransferMode === "direct"
-            ? "Browser connects to device directly. Use when the server is on a different network."
-            : "Server streams the file to device. Use when both are on the same network."}
-        </p>
-      </div>
-
-      {/* Remembered devices */}
-      {rememberedDevices.length > 0 && (
-        <>
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-px bg-border/50" />
-            <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Saved</span>
-            <div className="flex-1 h-px bg-border/50" />
-          </div>
-
-          <div className="space-y-1">
-            {rememberedDevices.map((dev, i) => (
-              <div key={i} className="flex items-center gap-2 px-2 py-1 rounded-md hover:bg-muted/50 group/dev">
-                <button
-                  className="flex-1 text-left text-xs truncate"
-                  onClick={() => selectDevice(dev)}
-                >
-                  {dev.label || `${dev.host}:${dev.port}`}
-                </button>
-                <Button
-                  variant="ghost" size="sm"
-                  className="h-5 w-5 p-0 opacity-0 group-hover/dev:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                  onClick={() => removeDevice(i)}
-                >
-                  <Trash2 className="w-3 h-3" />
+          {/* Setup info alert */}
+          {!infoDismissed && (
+            <Alert className="text-[11px]">
+              <Info className="w-3.5 h-3.5" />
+              <AlertTitle className="text-[11px]">Connect your Xteink</AlertTitle>
+              <AlertDescription className="text-[10px]">
+                <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
+                  <li>On your device, go to <strong>File Transfer</strong></li>
+                  <li>Connect to a <strong>WiFi network</strong></li>
+                  <li>Make sure this computer is on the <strong>same network</strong></li>
+                </ol>
+              </AlertDescription>
+              <AlertAction>
+                <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setInfoDismissed(true)}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
                 </Button>
+              </AlertAction>
+            </Alert>
+          )}
+
+          {/* Primary action: Scan */}
+          <Button
+            variant="outline"
+            className="w-full h-9 text-xs"
+            onClick={handleScan}
+            disabled={scanning}
+          >
+            {scanning ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Search className="w-3.5 h-3.5 mr-1.5" />}
+            {scanning ? "Scanning for devices..." : "Scan for device"}
+          </Button>
+
+          {scanResult && (
+            <p className="text-[10px] text-muted-foreground text-center">{scanResult}</p>
+          )}
+
+          {/* Saved devices — quick access */}
+          {rememberedDevices.length > 0 && (
+            <div className="space-y-1">
+              <span className="text-[10px] text-muted-foreground">Saved devices</span>
+              {rememberedDevices.map((dev, i) => (
+                <div key={i} className="flex items-center gap-2 px-2 py-1.5 rounded-md border border-border/50 hover:bg-muted/50 group/dev">
+                  <Smartphone className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <button
+                    className="flex-1 text-left text-xs truncate"
+                    onClick={() => selectDevice(dev)}
+                  >
+                    {dev.label || dev.host}
+                    <span className="text-muted-foreground ml-1">:{dev.port}</span>
+                  </button>
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-5 w-5 p-0 opacity-0 group-hover/dev:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                    onClick={() => removeDevice(i)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Manual entry — collapsible */}
+          <Collapsible open={showManual || (hasDevice && !isConnected)} onOpenChange={setShowManual}>
+            <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+              <ChevronDown className={`w-3 h-3 transition-transform ${showManual || (hasDevice && !isConnected) ? "rotate-0" : "-rotate-90"}`} />
+              Manual connection
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-2 mt-2">
+                <div className="grid grid-cols-[1fr_80px] gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="device-host" className="text-[10px]">IP Address</Label>
+                    <Input
+                      id="device-host"
+                      placeholder="192.168.4.1"
+                      value={s.deviceHost}
+                      onChange={(e) => { update({ deviceHost: e.target.value }); setConnectionStatus("unknown"); setDeviceInfo(null) }}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="device-port" className="text-[10px]">WS Port</Label>
+                    <Input
+                      id="device-port"
+                      type="number"
+                      value={s.devicePort}
+                      onChange={(e) => { update({ devicePort: parseInt(e.target.value) || 81 }); setConnectionStatus("unknown"); setDeviceInfo(null) }}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px] flex-1" onClick={handleTestConnection} disabled={testing || !s.deviceHost}>
+                    {testing ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Radio className="w-3 h-3 mr-1" />}
+                    {testing ? "Testing..." : "Connect"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={saveDevice} disabled={!s.deviceHost} title="Remember this device">
+                    +
+                  </Button>
+                </div>
+                {connectionStatus === "unreachable" && (
+                  <p className="text-[10px] text-destructive">Could not reach device at {s.deviceHost}. Check that File Transfer is active.</p>
+                )}
               </div>
-            ))}
-          </div>
+            </CollapsibleContent>
+          </Collapsible>
         </>
       )}
 
-      {/* Active transfer */}
+      {/* ── CONNECTED STATE ── */}
+      {isConnected && (
+        <>
+          {/* Compact connection header */}
+          <div className="rounded-md border border-border/50 bg-muted/30 px-3 py-2 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="h-auto text-[9px] px-1.5 py-0 text-emerald-600 border-emerald-600/30">
+                <Wifi className="w-2.5 h-2.5 mr-0.5" /> Connected
+              </Badge>
+              <span className="text-[11px] font-medium flex-1">{s.deviceHost}</span>
+              <Button variant="ghost" size="sm" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-foreground" onClick={disconnect}>
+                Disconnect
+              </Button>
+            </div>
+            {deviceInfo?.version && (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground">CrossPoint</span>
+                  <span className="text-[10px]">v{deviceInfo.version}</span>
+                </div>
+                {deviceInfo.mode && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground">Network</span>
+                    <span className="text-[10px]">
+                      {deviceInfo.mode === "AP" ? "AP" : "WiFi"}
+                      {deviceInfo.rssi != null && deviceInfo.rssi !== 0 && ` (${signalLabel(deviceInfo.rssi)})`}
+                    </span>
+                  </div>
+                )}
+                {deviceInfo.freeHeap != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1"><HardDrive className="w-2.5 h-2.5" /> Memory</span>
+                    <span className="text-[10px]">{formatBytes(deviceInfo.freeHeap)}</span>
+                  </div>
+                )}
+                {deviceInfo.uptime != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> Uptime</span>
+                    <span className="text-[10px]">{formatUptime(deviceInfo.uptime)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Advanced settings — collapsible */}
+          <Collapsible>
+            <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+              <Settings2 className="w-3 h-3" />
+              Advanced settings
+              <ChevronDown className="w-3 h-3 ml-auto transition-transform [[data-panel-open]_&]:rotate-180" />
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="space-y-3 mt-2">
+                <div className="space-y-1">
+                  <Label htmlFor="device-path" className="text-[10px]">Upload Path</Label>
+                  <Input
+                    id="device-path"
+                    placeholder="/"
+                    value={s.deviceUploadPath}
+                    onChange={(e) => update({ deviceUploadPath: e.target.value })}
+                    className="h-7 text-xs"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-[10px]">Transfer Mode</Label>
+                  <Select
+                    value={s.deviceTransferMode}
+                    onValueChange={(v) => update({ deviceTransferMode: v as "direct" | "relay" })}
+                  >
+                    <SelectTrigger className="h-7 text-xs">
+                      <SelectValue>{s.deviceTransferMode === "direct" ? "Direct (Browser)" : "Relay (Server)"}</SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectGroup>
+                        <SelectItem value="direct" className="text-xs">Direct (Browser)</SelectItem>
+                        <SelectItem value="relay" className="text-xs">Relay (Server)</SelectItem>
+                      </SelectGroup>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[10px] text-muted-foreground">
+                    {s.deviceTransferMode === "direct"
+                      ? "Browser connects to device directly. Use when the server is on a different network."
+                      : "Server streams the file to device. Use when both are on the same network."}
+                  </p>
+                </div>
+
+                {/* Save current device button */}
+                {!rememberedDevices.find(d => d.host === s.deviceHost && d.port === s.devicePort) && (
+                  <Button variant="outline" size="sm" className="h-7 text-[11px] w-full" onClick={saveDevice}>
+                    Remember this device
+                  </Button>
+                )}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </>
+      )}
+
+      {/* ── ACTIVE TRANSFER (shown in both states) ── */}
       {transferring && transferProgress && (
         <>
           <div className="flex items-center gap-2">
@@ -384,7 +398,7 @@ export function DeviceTab({
         </>
       )}
 
-      {/* File browser — shown when device is reachable */}
+      {/* ── FILE BROWSER (connected only) ── */}
       {s.deviceHost && isConnected && (
         <DeviceFileBrowser host={s.deviceHost} port={s.devicePort} />
       )}
