@@ -107,6 +107,7 @@ export function LibraryTab({
               </div>
               <input
                 readOnly
+                suppressHydrationWarning
                 value={opdsUrl}
                 className="flex-1 bg-transparent py-1 pr-2 text-[10px] text-foreground outline-none select-all cursor-text"
                 onFocus={(e) => e.currentTarget.select()}

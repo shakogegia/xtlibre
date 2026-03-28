@@ -192,7 +192,10 @@ export function MobileLayout({
             renderPreview={renderPreview}
             compact
           />
-          <div className="flex-1 min-h-0 overflow-y-auto flex flex-col [&>div]:shrink-0 [&>div]:basis-auto">
+          <div className={bookLoaded
+            ? "flex-1 min-h-0 overflow-y-auto"
+            : "flex-1 min-h-0 flex items-center justify-center"
+          }>
             <DevicePreview
               canvasRef={canvasRef} s={s} deviceColor={deviceColor}
               bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
