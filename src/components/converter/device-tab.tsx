@@ -132,23 +132,19 @@ export function DeviceTab({
             )}
           </div>
 
-          {s.deviceTransferMode === "relay" && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                className="w-full text-[11px]"
-                onClick={device.scan}
-                disabled={device.scanning}
-              >
-                {device.scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
-                {device.scanning ? "Scanning for devices..." : "Scan for device"}
-              </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-[11px]"
+            onClick={device.scan}
+            disabled={device.scanning}
+          >
+            {device.scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
+            {device.scanning ? "Scanning for devices..." : "Scan for device"}
+          </Button>
 
-              {device.scanResult && (
-                <p className="text-[10px] text-muted-foreground text-center">{device.scanResult}</p>
-              )}
-            </>
+          {device.scanResult && (
+            <p className="text-[10px] text-muted-foreground text-center">{device.scanResult}</p>
           )}
 
           {rememberedDevices.length > 0 && (
@@ -176,13 +172,11 @@ export function DeviceTab({
             </div>
           )}
 
-          <Collapsible open={s.deviceTransferMode === "direct" || showManual || (hasDevice && !isConnected)} onOpenChange={setShowManual}>
-            {s.deviceTransferMode === "relay" && (
-              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-                <ChevronDown className={`w-3 h-3 transition-transform ${showManual || (hasDevice && !isConnected) ? "rotate-0" : "-rotate-90"}`} />
-                Manual connection
-              </CollapsibleTrigger>
-            )}
+          <Collapsible open={showManual || (hasDevice && !isConnected)} onOpenChange={setShowManual}>
+            <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+              <ChevronDown className={`w-3 h-3 transition-transform ${showManual || (hasDevice && !isConnected) ? "rotate-0" : "-rotate-90"}`} />
+              Manual connection
+            </CollapsibleTrigger>
             <CollapsibleContent>
               <div className="space-y-2 mt-2">
                 <div className="grid grid-cols-[1fr_80px] gap-2">
