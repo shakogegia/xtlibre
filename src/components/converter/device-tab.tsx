@@ -64,6 +64,7 @@ export function DeviceTab({
   const [deviceInfo, setDeviceInfo] = useState<DeviceStatus | null>(null)
   const [infoDismissed, setInfoDismissed] = useState(false)
   const [showManual, setShowManual] = useState(false)
+  const [initialCheckDone, setInitialCheckDone] = useState(false)
 
   const rememberedDevices: RememberedDevice[] = useMemo(() => {
     try { return JSON.parse(s.rememberedDevices) } catch { return [] }
@@ -120,11 +121,15 @@ export function DeviceTab({
   }, [s.deviceHost, s.devicePort, fetchDeviceStatus])
 
   useEffect(() => {
-    if (!s.deviceHost) {
-      handleScan()
-    } else {
-      fetchDeviceStatus(s.deviceHost, s.devicePort)
+    const init = async () => {
+      if (!s.deviceHost) {
+        await handleScan()
+      } else {
+        await fetchDeviceStatus(s.deviceHost, s.devicePort)
+      }
+      setInitialCheckDone(true)
     }
+    init()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -165,7 +170,7 @@ export function DeviceTab({
   return (
     <div className="space-y-3">
       {/* ── NOT CONNECTED STATE ── */}
-      {!isConnected && (
+      {!isConnected && initialCheckDone && (
         <>
           {/* Setup info alert */}
           {!infoDismissed && (
