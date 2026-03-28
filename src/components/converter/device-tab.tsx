@@ -140,15 +140,18 @@ export function DeviceTab({
   }, [s.deviceHost, s.devicePort, s.deviceTransferMode, fetchDeviceStatus])
 
   useEffect(() => {
+    // Skip auto-test if a transfer is active — opening a second WebSocket
+    // would disconnect the active transfer (device handles one connection at a time)
+    if (transferring) {
+      setInitialCheckDone(true)
+      return
+    }
     const init = async () => {
       if (s.deviceHost) {
-        // Have a saved host — test it
         await fetchDeviceStatus(s.deviceHost, s.devicePort, s.deviceTransferMode)
       } else if (s.deviceTransferMode === "relay") {
-        // Relay mode: server is on the LAN, scan makes sense
         await handleScan()
       }
-      // Direct mode with no host: just show the UI immediately
       setInitialCheckDone(true)
     }
     init()
