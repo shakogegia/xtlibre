@@ -1,5 +1,14 @@
 import { requireAuth } from "@/lib/auth"
-import net from "net"
+
+export interface DeviceStatus {
+  reachable: boolean
+  version?: string
+  ip?: string
+  mode?: string // "STA" (WiFi) or "AP" (access point)
+  rssi?: number // WiFi signal strength in dBm
+  freeHeap?: number
+  uptime?: number
+}
 
 export async function GET(request: Request) {
   const denied = await requireAuth(request)
@@ -7,23 +16,32 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url)
   const host = url.searchParams.get("host")
-  const port = parseInt(url.searchParams.get("port") || "81", 10)
+  const port = url.searchParams.get("port") || "80"
 
   if (!host) {
     return Response.json({ error: "host is required" }, { status: 400 })
   }
 
-  const reachable = await testConnection(host, port, 5000)
-  return Response.json({ reachable })
-}
-
-function testConnection(host: string, port: number, timeoutMs: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const sock = new net.Socket()
-    sock.setTimeout(timeoutMs)
-    sock.on("connect", () => { sock.destroy(); resolve(true) })
-    sock.on("error", () => { sock.destroy(); resolve(false) })
-    sock.on("timeout", () => { sock.destroy(); resolve(false) })
-    sock.connect(port, host)
-  })
+  try {
+    // Try to fetch /api/status from the device's HTTP server (port 80)
+    const resp = await fetch(`http://${host}:${port}/api/status`, {
+      signal: AbortSignal.timeout(5000),
+    })
+    if (resp.ok) {
+      const data = await resp.json()
+      return Response.json({
+        reachable: true,
+        version: data.version,
+        ip: data.ip,
+        mode: data.mode,
+        rssi: data.rssi,
+        freeHeap: data.freeHeap,
+        uptime: data.uptime,
+      } satisfies DeviceStatus)
+    }
+    // HTTP responded but not 200 — still reachable
+    return Response.json({ reachable: true } satisfies DeviceStatus)
+  } catch {
+    return Response.json({ reachable: false } satisfies DeviceStatus)
+  }
 }
