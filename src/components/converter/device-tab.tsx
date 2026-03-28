@@ -169,6 +169,14 @@ export function DeviceTab({
 
   return (
     <div className="space-y-3">
+      {/* ── LOADING STATE ── */}
+      {!isConnected && !initialCheckDone && (
+        <div className="flex flex-col items-center gap-2 py-8">
+          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          <p className="text-[11px] text-muted-foreground">Looking for device...</p>
+        </div>
+      )}
+
       {/* ── NOT CONNECTED STATE ── */}
       {!isConnected && initialCheckDone && (
         <>
