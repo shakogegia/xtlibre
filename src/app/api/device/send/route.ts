@@ -1,0 +1,122 @@
+import { requireAuth } from "@/lib/auth"
+import { getBook, getLibraryDir } from "@/lib/db"
+import path from "path"
+import fs from "fs"
+import WebSocket from "ws"
+
+export async function POST(request: Request) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
+  const body = await request.json().catch(() => null)
+  if (!body?.bookId || !body?.host || !body?.port) {
+    return Response.json({ error: "bookId, host, and port are required" }, { status: 400 })
+  }
+
+  const { bookId, host, port, uploadPath = "/" } = body
+  const book = getBook(bookId)
+  if (!book?.filename) {
+    return Response.json({ error: "Book not found or no XTC file" }, { status: 404 })
+  }
+
+  const filePath = path.join(getLibraryDir(), book.filename)
+  if (!fs.existsSync(filePath)) {
+    return Response.json({ error: "File not found on disk" }, { status: 404 })
+  }
+
+  const fileData = fs.readFileSync(filePath)
+  const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
+  const filename = book.title.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 50) + ext
+
+  const stream = new ReadableStream({
+    start(controller) {
+      const encoder = new TextEncoder()
+      const send = (data: object) => {
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`))
+      }
+
+      const ws = new WebSocket(`ws://${host}:${port}/`)
+      let done = false
+
+      const timeout = setTimeout(() => {
+        if (!done) {
+          done = true
+          send({ type: "error", message: "Connection timed out" })
+          controller.close()
+          try { ws.close() } catch {}
+        }
+      }, 10000)
+
+      ws.on("open", () => {
+        clearTimeout(timeout)
+        ws.send(`START:${filename}:${fileData.byteLength}:${uploadPath}`)
+      })
+
+      ws.on("message", (data) => {
+        const msg = data.toString()
+
+        if (msg === "READY") {
+          const chunkSize = 16384
+          let sent = 0
+
+          const sendChunk = () => {
+            if (done) return
+            if (sent >= fileData.byteLength) return
+
+            const end = Math.min(sent + chunkSize, fileData.byteLength)
+            ws.send(fileData.slice(sent, end))
+            sent = end
+            send({ type: "progress", sent, total: fileData.byteLength })
+
+            if (sent < fileData.byteLength) {
+              setImmediate(sendChunk)
+            }
+          }
+          sendChunk()
+          return
+        }
+
+        if (msg === "DONE") {
+          done = true
+          send({ type: "done" })
+          controller.close()
+          ws.close()
+          return
+        }
+
+        if (msg.startsWith("ERROR")) {
+          done = true
+          send({ type: "error", message: msg.slice(6) || "Device error" })
+          controller.close()
+          ws.close()
+          return
+        }
+      })
+
+      ws.on("error", (err) => {
+        if (!done) {
+          done = true
+          clearTimeout(timeout)
+          send({ type: "error", message: `Connection failed: ${err.message}` })
+          controller.close()
+        }
+      })
+
+      ws.on("close", () => {
+        if (!done) {
+          done = true
+          send({ type: "error", message: "Connection closed unexpectedly" })
+          controller.close()
+        }
+      })
+    },
+  })
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  })
+}
