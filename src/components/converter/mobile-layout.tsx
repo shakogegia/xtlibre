@@ -207,7 +207,7 @@ export function MobileLayout({
       </div>
 
       {/* Bottom navigation bar */}
-      <div className="border-t border-border/50 bg-card">
+      <div className="border-t border-border/50 bg-card" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <TabsList variant="line" className="w-full rounded-none p-0 gap-0" style={{ height: "3.5rem" }}>
           {TABS.map(({ value, label, icon: Icon }) => (
             <TabsTrigger
