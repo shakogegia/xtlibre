@@ -2,6 +2,7 @@ import path from "path"
 import fs from "fs"
 import { getBook, deleteBook, getLibraryDir, updateBookMeta } from "@/lib/db"
 import { requireAuth } from "@/lib/auth"
+import { updateEpubMetadata } from "@/lib/epub-metadata"
 
 export async function GET(
   request: Request,
@@ -54,6 +55,19 @@ export async function PATCH(
   const updated = updateBookMeta(id, title, author || null)
   if (!updated) {
     return Response.json({ error: "Not found" }, { status: 404 })
+  }
+
+  // Update EPUB metadata if the file exists
+  const book = getBook(id)
+  if (book?.epub_filename) {
+    const epubPath = path.join(getLibraryDir(), book.epub_filename)
+    if (fs.existsSync(epubPath)) {
+      const epubBuffer = fs.readFileSync(epubPath)
+      const updatedEpub = updateEpubMetadata(epubBuffer, title, author || null)
+      if (updatedEpub) {
+        fs.writeFileSync(epubPath, updatedEpub)
+      }
+    }
   }
 
   return Response.json({ ok: true, id, title, author })
