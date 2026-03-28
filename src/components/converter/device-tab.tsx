@@ -141,11 +141,14 @@ export function DeviceTab({
 
   useEffect(() => {
     const init = async () => {
-      if (!s.deviceHost) {
-        await handleScan()
-      } else {
+      if (s.deviceHost) {
+        // Have a saved host — test it
         await fetchDeviceStatus(s.deviceHost, s.devicePort, s.deviceTransferMode)
+      } else if (s.deviceTransferMode === "relay") {
+        // Relay mode: server is on the LAN, scan makes sense
+        await handleScan()
       }
+      // Direct mode with no host: just show the UI immediately
       setInitialCheckDone(true)
     }
     init()
@@ -241,19 +244,23 @@ export function DeviceTab({
           </div>
 
           {/* Primary action: Scan */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-[11px]"
-            onClick={handleScan}
-            disabled={scanning}
-          >
-            {scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
-            {scanning ? "Scanning for devices..." : "Scan for device"}
-          </Button>
+          {s.deviceTransferMode === "relay" && (
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full text-[11px]"
+                onClick={handleScan}
+                disabled={scanning}
+              >
+                {scanning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Search className="w-3 h-3 mr-1" />}
+                {scanning ? "Scanning for devices..." : "Scan for device"}
+              </Button>
 
-          {scanResult && (
-            <p className="text-[10px] text-muted-foreground text-center">{scanResult}</p>
+              {scanResult && (
+                <p className="text-[10px] text-muted-foreground text-center">{scanResult}</p>
+              )}
+            </>
           )}
 
           {/* Saved devices — quick access */}
@@ -282,12 +289,14 @@ export function DeviceTab({
             </div>
           )}
 
-          {/* Manual entry — collapsible */}
-          <Collapsible open={showManual || (hasDevice && !isConnected)} onOpenChange={setShowManual}>
-            <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
-              <ChevronDown className={`w-3 h-3 transition-transform ${showManual || (hasDevice && !isConnected) ? "rotate-0" : "-rotate-90"}`} />
-              Manual connection
-            </CollapsibleTrigger>
+          {/* Manual entry — open by default in Direct mode (no scan), collapsible in Relay */}
+          <Collapsible open={s.deviceTransferMode === "direct" || showManual || (hasDevice && !isConnected)} onOpenChange={setShowManual}>
+            {s.deviceTransferMode === "relay" && (
+              <CollapsibleTrigger className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full">
+                <ChevronDown className={`w-3 h-3 transition-transform ${showManual || (hasDevice && !isConnected) ? "rotate-0" : "-rotate-90"}`} />
+                Manual connection
+              </CollapsibleTrigger>
+            )}
             <CollapsibleContent>
               <div className="space-y-2 mt-2">
                 <div className="grid grid-cols-[1fr_80px] gap-2">
