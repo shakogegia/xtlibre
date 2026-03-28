@@ -126,6 +126,9 @@ export function MobileLayout({
     <Tabs
       defaultValue={initialTab}
       onValueChange={(v) => {
+        const url = new URL(window.location.href)
+        url.searchParams.set("tab", String(v))
+        window.history.replaceState({}, "", url.toString())
         if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse()
       }}
       className={cn("flex-1 flex flex-col min-h-0", className)}
