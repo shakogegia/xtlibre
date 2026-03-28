@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   const fileData = fs.readFileSync(filePath)
   const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
   const nameBase = book.author ? `${book.title} - ${book.author}` : book.title
-  const filename = nameBase.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80) + ext
+  const filename = nameBase.replace(/[^a-zA-Z0-9 ._-]/g, "_").substring(0, 80).trim() + ext
 
   const stream = new ReadableStream({
     start(controller) {
