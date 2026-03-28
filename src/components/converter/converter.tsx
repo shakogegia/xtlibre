@@ -604,6 +604,7 @@ export function Converter({
     abortControllerRef.current = null
     setTransferring(false)
     setTransferProgress(null)
+    toast.dismiss()
   }, [])
 
   const sendToDevice = useCallback(async (bookId: string) => {
@@ -628,6 +629,9 @@ export function Converter({
     try {
       if (settings.deviceTransferMode === "relay") {
         // Relay mode: server streams to device, progress via SSE
+        const abortController = new AbortController()
+        abortControllerRef.current = abortController
+
         const resp = await fetch("/api/device/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -637,6 +641,7 @@ export function Converter({
             port: settings.devicePort,
             uploadPath: settings.deviceUploadPath,
           }),
+          signal: abortController.signal,
         })
 
         if (!resp.ok) {
@@ -704,6 +709,10 @@ export function Converter({
         toast.success(`Sent "${book.title}" to device`, { id: toastId, duration: 4000 })
       }
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.dismiss(toastId)
+        return
+      }
       const message = err instanceof DeviceError ? err.message : "Transfer failed"
       toast.error(message, { id: toastId, duration: 4000 })
     } finally {

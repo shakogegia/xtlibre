@@ -98,7 +98,7 @@ const stmts = {
     SELECT * FROM books WHERE original_epub_name = @original_epub_name AND file_size = @file_size LIMIT 1
   `),
   linkXtcToBook: db.prepare(`
-    UPDATE books SET filename = @filename, device_type = @device_type WHERE id = @id
+    UPDATE books SET filename = @filename, device_type = @device_type, file_size = @file_size WHERE id = @id
   `),
   updateMeta: db.prepare(`
     UPDATE books SET title = @title, author = @author WHERE id = @id
@@ -208,8 +208,8 @@ export function findByOriginalEpub(originalName: string, fileSize: number): Book
   }) as Book | undefined
 }
 
-export function linkXtcToBook(id: string, filename: string, deviceType: string | null) {
-  stmts.linkXtcToBook.run({ id, filename, device_type: deviceType })
+export function linkXtcToBook(id: string, filename: string, deviceType: string | null, fileSize: number) {
+  stmts.linkXtcToBook.run({ id, filename, device_type: deviceType, file_size: fileSize })
 }
 
 export function updateBookMeta(id: string, title: string, author: string | null): boolean {

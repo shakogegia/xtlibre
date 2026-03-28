@@ -417,7 +417,11 @@ export function DeviceTab({
                   <Label className="text-[10px]">Transfer Mode</Label>
                   <Select
                     value={s.deviceTransferMode}
-                    onValueChange={(v) => update({ deviceTransferMode: v as "direct" | "relay" })}
+                    onValueChange={(v) => {
+                      const mode = v as "direct" | "relay"
+                      update({ deviceTransferMode: mode })
+                      if (s.deviceHost) fetchDeviceStatus(s.deviceHost, s.devicePort, mode)
+                    }}
                   >
                     <SelectTrigger className="h-7 text-xs">
                       <SelectValue>{s.deviceTransferMode === "direct" ? "Direct (Browser)" : "Relay (Server)"}</SelectValue>

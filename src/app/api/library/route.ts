@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       const filename = `${id}${ext}`
       const filePath = path.join(getLibraryDir(), filename)
       fs.writeFileSync(filePath, Buffer.from(arrayBuffer))
-      linkXtcToBook(id, filename, deviceType)
+      linkXtcToBook(id, filename, deviceType, arrayBuffer.byteLength)
       return Response.json({ id, title, author })
     }
 
