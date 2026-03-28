@@ -373,6 +373,7 @@ export function DeviceTab({
                     onChange={(e) => update({ deviceUploadPath: e.target.value })}
                     className="h-7 text-xs"
                   />
+                  <p className="text-[10px] text-muted-foreground">Folder must already exist on the device.</p>
                 </div>
 
                 <div className="space-y-1">
