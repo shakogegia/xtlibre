@@ -190,12 +190,14 @@ export function MobileLayout({
             renderPreview={renderPreview}
             compact
           />
-          <DevicePreview
-            canvasRef={canvasRef} s={s} deviceColor={deviceColor}
-            bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
-            page={page} pages={pages} goToPage={goToPage}
-            processing={processing} handleGenerateXtc={handleGenerateXtc}
-          />
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <DevicePreview
+              canvasRef={canvasRef} s={s} deviceColor={deviceColor}
+              bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
+              page={page} pages={pages} goToPage={goToPage}
+              processing={processing} handleGenerateXtc={handleGenerateXtc}
+            />
+          </div>
         </TabsContent>
       </div>
 
