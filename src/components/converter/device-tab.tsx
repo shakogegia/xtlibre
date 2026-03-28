@@ -295,7 +295,7 @@ export function DeviceTab({
                     <Label htmlFor="device-host" className="text-[10px]">IP Address</Label>
                     <Input
                       id="device-host"
-                      placeholder="192.168.4.1"
+                      placeholder="crosspoint.local"
                       value={s.deviceHost}
                       onChange={(e) => { update({ deviceHost: e.target.value }); setConnectionStatus("unknown"); setDeviceInfo(null) }}
                       className="h-7 text-xs"
