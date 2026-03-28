@@ -32,6 +32,12 @@ export const settingsSchema = z.object({
   progressSideMargin: z.number().min(0).max(30),
   fontHinting: z.number(),
   fontAntialiasing: z.number(),
+  // Device
+  deviceHost: z.string().default(""),
+  devicePort: z.number().min(1).max(65535).default(81),
+  deviceUploadPath: z.string().default("/"),
+  deviceTransferMode: z.enum(["direct", "relay"]).default("direct"),
+  rememberedDevices: z.string().default("[]"),
 })
 
 export type Settings = z.infer<typeof settingsSchema>
@@ -68,4 +74,9 @@ export const DEFAULT_SETTINGS: Settings = {
   progressSideMargin: 0,
   fontHinting: 1,
   fontAntialiasing: 2,
+  deviceHost: "",
+  devicePort: 81,
+  deviceUploadPath: "/",
+  deviceTransferMode: "direct" as const,
+  rememberedDevices: "[]",
 }
