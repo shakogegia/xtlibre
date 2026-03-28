@@ -2,7 +2,7 @@ import { Converter } from "@/components/converter/converter"
 import { getSettings, listFonts } from "@/lib/db"
 import { DEFAULT_SETTINGS } from "@/lib/settings-schema"
 
-const VALID_TABS = new Set(["library", "options", "calibre", "device"])
+const VALID_TABS = new Set(["library", "options", "calibre", "device", "preview"])
 
 export default async function Page({
   searchParams,

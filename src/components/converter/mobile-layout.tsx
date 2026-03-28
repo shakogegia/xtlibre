@@ -1,16 +1,29 @@
+"use client"
+
 import React from "react"
-import { cn } from "@/lib/utils"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { OptionsTab } from "@/components/converter/options-tab"
-import { CalibreTab } from "@/components/converter/calibre-tab"
 import { LibraryTab } from "@/components/converter/library-tab"
+import { CalibreTab } from "@/components/converter/calibre-tab"
+import { OptionsTab } from "@/components/converter/options-tab"
 import { DeviceTab } from "@/components/converter/device-tab"
+import { DevicePreview } from "@/components/converter/device-preview"
+import { Toolbar } from "@/components/converter/toolbar"
+import { Library, BookOpen, SlidersHorizontal, Tablet, Eye } from "lucide-react"
+import { cn } from "@/lib/utils"
 import {
-  type Settings, type BookMetadata, type TocItem, type Renderer,
+  type Settings, type BookMetadata, type TocItem, type Renderer, type DeviceColor,
 } from "@/lib/types"
 import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
 
-interface SidebarProps {
+const TABS = [
+  { value: "library", label: "Library", icon: Library },
+  { value: "calibre", label: "Calibre", icon: BookOpen },
+  { value: "options", label: "Options", icon: SlidersHorizontal },
+  { value: "device", label: "Device", icon: Tablet },
+  { value: "preview", label: "Preview", icon: Eye },
+] as const
+
+interface MobileLayoutProps {
   className?: string
   initialTab: string
   opdsUrl: string | null
@@ -74,40 +87,54 @@ interface SidebarProps {
   transferring: boolean
   transferProgress: { sent: number; total: number; filename: string } | null
   cancelTransfer: () => void
+
+  // Preview
+  canvasRef: React.RefObject<HTMLCanvasElement | null>
+  deviceColor: DeviceColor
+  bookLoaded: boolean
+  loading: boolean
+  loadingMsg: string
+  wasmReady: boolean
+  page: number
+  pages: number
+  goToPage: (pg: number) => void
+  prevPage: () => void
+  nextPage: () => void
+  processing: boolean
+  handleGenerateXtc: () => void
+  setDeviceColor: React.Dispatch<React.SetStateAction<DeviceColor>>
 }
 
-export function Sidebar({
+export function MobileLayout({
   className,
   initialTab, opdsUrl,
-  // Files
   fileInputRef, addFiles, dragOver, setDragOver,
-  // Options tab
   s, meta, toc, customFonts, uploadCustomFont, deleteCustomFont,
   update, updateAndReformat, updateAndRender,
   flushReformat, flushRender, handleFontChange, handleQualityChange,
   handleHyphenationChange, handleHyphenLangChange,
   renderPreview, rendererRef,
-  // Calibre tab
   calibreConnected, opdsFeed, opdsLoading, opdsError, opdsSearch, opdsNavStack,
   opdsDownloading, setOpdsSettingsOpen, setOpdsSearch, setOpdsError,
   opdsBrowse, opdsBack, opdsDoSearch, opdsImportBook,
-  // Library
   activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
-  // Device
   sendToDevice, deviceConfigured, transferring, transferProgress, cancelTransfer,
-}: SidebarProps) {
+  canvasRef, deviceColor, bookLoaded, loading, loadingMsg, wasmReady,
+  page, pages, goToPage, prevPage, nextPage, processing, handleGenerateXtc, setDeviceColor,
+}: MobileLayoutProps) {
   return (
-    <div className={cn("w-[360px] border-r border-border/50 flex flex-col bg-card/50", className)}>
-      <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
-        <div className="flex items-center px-4 py-2 border-b border-border/50">
-          <TabsList className="w-full !h-7 p-0.5">
-            <TabsTrigger value="library" className="text-[12px]">Library</TabsTrigger>
-            <TabsTrigger value="options" className="text-[12px]">Options</TabsTrigger>
-            <TabsTrigger value="calibre" className="text-[12px]">Calibre</TabsTrigger>
-            <TabsTrigger value="device" className="text-[12px]">Device</TabsTrigger>
-          </TabsList>
-        </div>
-
+    <Tabs
+      defaultValue={initialTab}
+      onValueChange={(v) => {
+        const url = new URL(window.location.href)
+        url.searchParams.set("tab", String(v))
+        window.history.replaceState({}, "", url.toString())
+        if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse()
+      }}
+      className={cn("flex-1 flex flex-col min-h-0", className)}
+    >
+      {/* Tab content area — fills available space above the bottom bar */}
+      <div className="flex-1 min-h-0 flex flex-col">
         <TabsContent value="library" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
           <LibraryTab
             fileInputRef={fileInputRef} addFiles={addFiles}
@@ -156,7 +183,44 @@ export function Sidebar({
             cancelTransfer={cancelTransfer}
           />
         </TabsContent>
-      </Tabs>
-    </div>
+
+        <TabsContent value="preview" className="flex-1 min-h-0 flex flex-col">
+          <Toolbar
+            bookLoaded={bookLoaded} page={page} pages={pages} meta={meta}
+            prevPage={prevPage} nextPage={nextPage}
+            deviceColor={deviceColor} setDeviceColor={setDeviceColor}
+            renderPreview={renderPreview}
+            compact
+          />
+          <div className={bookLoaded
+            ? "flex-1 min-h-0 overflow-y-auto"
+            : "flex-1 min-h-0 flex items-center justify-center"
+          }>
+            <DevicePreview
+              canvasRef={canvasRef} s={s} deviceColor={deviceColor}
+              bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
+              page={page} pages={pages} goToPage={goToPage}
+              processing={processing} handleGenerateXtc={handleGenerateXtc}
+            />
+          </div>
+        </TabsContent>
+      </div>
+
+      {/* Bottom navigation bar */}
+      <div className="border-t border-border/50 bg-card" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <TabsList variant="line" className="w-full rounded-none p-0 gap-0" style={{ height: "3.5rem" }}>
+          {TABS.map(({ value, label, icon: Icon }) => (
+            <TabsTrigger
+              key={value}
+              value={value}
+              className="flex-1 flex flex-col items-center justify-center gap-0.5 py-2 px-1 rounded-none border-0 h-full text-muted-foreground data-active:text-primary data-active:bg-transparent data-active:shadow-none data-active:after:opacity-0 dark:data-active:bg-transparent dark:data-active:border-transparent [&_svg]:!size-5"
+            >
+              <Icon size={20} />
+              <span className="text-[10px]">{label}</span>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </div>
+    </Tabs>
   )
 }
