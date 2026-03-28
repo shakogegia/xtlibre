@@ -176,8 +176,12 @@ export function DeviceTab({
                 <ol className="list-decimal pl-3.5 space-y-0.5 mt-1">
                   <li>On your device, go to <strong>File Transfer</strong></li>
                   <li>Connect to a <strong>WiFi network</strong></li>
-                  <li>Make sure this computer is on the <strong>same network</strong></li>
                 </ol>
+                <p className="mt-1.5 text-muted-foreground">
+                  {s.deviceTransferMode === "direct"
+                    ? "This computer (browser) must be on the same network as the device."
+                    : "The XTLibre server must be on the same network as the device."}
+                </p>
               </AlertDescription>
               <AlertAction>
                 <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setInfoDismissed(true)}>
@@ -186,6 +190,30 @@ export function DeviceTab({
               </AlertAction>
             </Alert>
           )}
+
+          {/* Transfer mode — shown before connection so user picks the right setup */}
+          <div className="space-y-1">
+            <Label className="text-[10px]">Transfer Mode</Label>
+            <Select
+              value={s.deviceTransferMode}
+              onValueChange={(v) => update({ deviceTransferMode: v as "direct" | "relay" })}
+            >
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue>{s.deviceTransferMode === "direct" ? "Direct (Browser)" : "Relay (Server)"}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="direct" className="text-xs">Direct (Browser → Device)</SelectItem>
+                  <SelectItem value="relay" className="text-xs">Relay (Server → Device)</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-[10px] text-muted-foreground">
+              {s.deviceTransferMode === "direct"
+                ? "Your browser sends files to the device. Both must be on the same WiFi."
+                : "The server sends files to the device. Use when the server is on the same network as the device."}
+            </p>
+          </div>
 
           {/* Primary action: Scan */}
           <Button
@@ -342,7 +370,7 @@ export function DeviceTab({
                   />
                 </div>
 
-                <div className="space-y-1.5">
+                <div className="space-y-1">
                   <Label className="text-[10px]">Transfer Mode</Label>
                   <Select
                     value={s.deviceTransferMode}
@@ -353,16 +381,11 @@ export function DeviceTab({
                     </SelectTrigger>
                     <SelectContent>
                       <SelectGroup>
-                        <SelectItem value="direct" className="text-xs">Direct (Browser)</SelectItem>
-                        <SelectItem value="relay" className="text-xs">Relay (Server)</SelectItem>
+                        <SelectItem value="direct" className="text-xs">Direct (Browser → Device)</SelectItem>
+                        <SelectItem value="relay" className="text-xs">Relay (Server → Device)</SelectItem>
                       </SelectGroup>
                     </SelectContent>
                   </Select>
-                  <p className="text-[10px] text-muted-foreground">
-                    {s.deviceTransferMode === "direct"
-                      ? "Browser connects to device directly. Use when the server is on a different network."
-                      : "Server streams the file to device. Use when both are on the same network."}
-                  </p>
                 </div>
 
                 {/* Save current device button */}
