@@ -1074,7 +1074,7 @@ export function Converter({
 
   return (
     <DeviceProvider settings={s} updateSettings={update}>
-    <div className="flex h-screen flex-col md:flex-row bg-background">
+    <div className="flex h-screen flex-col md:flex-row bg-background" style={{ height: "100dvh" }}>
       {/* Desktop sidebar — hidden on mobile */}
       <Sidebar
         className="hidden md:flex"
