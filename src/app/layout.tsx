@@ -20,6 +20,12 @@ export const metadata: Metadata = {
   description: "Convert EPUB e-books to XTC format for XTEInk e-readers",
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
