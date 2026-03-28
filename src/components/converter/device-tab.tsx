@@ -189,7 +189,7 @@ export function DeviceTab({
     ? Math.round((transferProgress.sent / transferProgress.total) * 100)
     : 0
 
-  const isConnected = connectionStatus === "reachable"
+  const isConnected = connectionStatus === "reachable" || transferring
   const hasDevice = !!s.deviceHost
 
   return (

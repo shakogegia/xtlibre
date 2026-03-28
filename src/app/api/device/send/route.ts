@@ -58,22 +58,32 @@ export async function POST(request: Request) {
 
         if (msg === "READY") {
           const chunkSize = 2048
-          let sent = 0
+          let queued = 0
 
           const sendChunk = () => {
             if (done) return
-            if (sent >= fileData.byteLength) return
+            if (queued >= fileData.byteLength) return
 
-            const end = Math.min(sent + chunkSize, fileData.byteLength)
-            ws.send(fileData.slice(sent, end))
-            sent = end
-            send({ type: "progress", sent, total: fileData.byteLength })
+            const end = Math.min(queued + chunkSize, fileData.byteLength)
+            ws.send(fileData.slice(queued, end))
+            queued = end
 
-            if (sent < fileData.byteLength) {
+            if (queued < fileData.byteLength) {
               setImmediate(sendChunk)
             }
           }
           sendChunk()
+          return
+        }
+
+        // Device reports actual bytes received — forward to client
+        if (msg.startsWith("PROGRESS:")) {
+          const parts = msg.slice(9).split(":")
+          const received = parseInt(parts[0], 10)
+          const total = parseInt(parts[1], 10)
+          if (!isNaN(received) && !isNaN(total)) {
+            send({ type: "progress", sent: received, total })
+          }
           return
         }
 
