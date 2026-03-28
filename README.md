@@ -66,7 +66,8 @@ The fastest way to run XTLibre is with Docker:
 ```bash
 docker run -d \
   --name xtlibre \
-  -p 3000:3000 \
+  --network host \
+  -e PORT=3000 \
   -e AUTH_USERNAME=admin \
   -e AUTH_PASSWORD=changeme \
   -e PUBLIC_URL=http://localhost:3000 \
@@ -76,15 +77,17 @@ docker run -d \
 
 Then open [http://localhost:3000](http://localhost:3000).
 
+> **Note:** `--network host` is required for the relay mode device scan to discover e-readers on your LAN. Without it, UDP broadcasts stay inside the Docker network. If you don't need device scanning, you can use `-p 3000:3000` instead. Set the `PORT` env var to change the listening port (default 3000).
+
 ### Docker Compose
 
 ```yaml
 services:
   xtlibre:
     image: shakogegia/xtlibre
-    ports:
-      - "3000:3000"
+    network_mode: host
     environment:
+      PORT: 3000 # default 3000, change if needed
       AUTH_USERNAME: admin
       AUTH_PASSWORD: changeme
       PUBLIC_URL: http://localhost:3000
