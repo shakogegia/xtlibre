@@ -171,7 +171,7 @@ export function DeviceTab({
     <div className="space-y-3">
       {/* ── LOADING STATE ── */}
       {!isConnected && !initialCheckDone && (
-        <div className="flex flex-col items-center gap-2 py-8">
+        <div className="flex flex-col items-center justify-center gap-2 h-full min-h-[200px]">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           <p className="text-[11px] text-muted-foreground">Looking for device...</p>
         </div>
