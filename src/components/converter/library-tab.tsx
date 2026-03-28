@@ -69,8 +69,14 @@ export function LibraryTab({
         }`}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         </div>
-        <div className="text-xs font-medium">Drop EPUB files here</div>
-        <div className="text-[11px] text-muted-foreground mt-0.5">or click to browse</div>
+        <div className="text-xs font-medium">
+          <span className="hidden md:inline">Drop EPUB files here</span>
+          <span className="md:hidden">Tap to upload EPUB</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground mt-0.5">
+          <span className="hidden md:inline">or click to browse</span>
+          <span className="md:hidden">Select files from your device</span>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -167,7 +173,7 @@ export function LibraryTab({
                     </div>
                   </div>
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover/lib:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                <div className="flex gap-1 md:opacity-0 md:group-hover/lib:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                   <Tooltip>
                     <TooltipTrigger render={
                       <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditBook({ id: book.id, title: book.title, author: book.author || "" })}>
