@@ -1,12 +1,13 @@
 # XTLibre
 
-EPUB-to-XTC converter for [Xteink](https://xteink.com) e-readers. Renders EPUBs in the browser via CREngine (WASM), previews them on a realistic device frame, and exports `.xtc` files ready to transfer to your device.
+A self-hosted companion app for [Xteink](https://xteink.com) and [CrossPoint](https://github.com/crosspoint-reader/crosspoint-reader) e-readers. Convert EPUBs to XTC format, manage your library, send books wirelessly to your device, and browse device files — all from your browser.
 
 <img width="1418" height="959" alt="Xnip2026-03-27_22-32-46" src="https://github.com/user-attachments/assets/ca2cee9f-2074-4068-a2d5-59fd6f19b833" />
 
 
 ## Features
 
+### Converter
 - **Device preview** — realistic on-screen frames for Xteink X4 (480×800) and X3 (528×792)
 - **Configurable rendering** — font family, size, weight, line spacing, margins, text alignment, and hyphenation
 - **Custom fonts** — upload TTF/OTF fonts for rendering
@@ -15,11 +16,22 @@ EPUB-to-XTC converter for [Xteink](https://xteink.com) e-readers. Renders EPUBs 
 - **Progress bar** — configurable progress bar with chapter marks, page info, and dither control
 - **Batch export** — export a single page or all pages at once as `.xtc`
 - **Page scrubber** — quickly jump through long books
+
+### Library & Calibre
+- **Save to Library** — save converted XTC files and source EPUBs to the server for later access
+- **Calibre-Web integration** — browse and download EPUBs from your [Calibre-Web](https://github.com/janeczku/calibre-web) or [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) library via OPDS
+- **OPDS catalog** — your Xteink device can browse and download XTC files directly at `/opds`
+
+### Device
+- **Send to device** — upload XTC files wirelessly to your Xteink/CrossPoint e-reader over WebSocket
+- **Auto-discovery** — scan for devices on your local network via UDP broadcast
+- **File browser** — browse, navigate, and delete files on your device
+- **Two transfer modes** — Direct (browser → device) for remote servers, Relay (server → device) for same-network setups
+- **Device info** — view firmware version, WiFi signal, memory, and uptime
+
+### General
 - **Persistent settings** — options are saved server-side to SQLite
 - **Authentication** — login page with JWT session cookies; HTTP Basic Auth for OPDS
-- **Calibre-Web integration** — browse and download EPUBs from your [Calibre-Web](https://github.com/janeczku/calibre-web) or [Calibre-Web-Automated](https://github.com/crocodilestick/Calibre-Web-Automated) library via OPDS
-- **Save to Library** — save converted XTC files and source EPUBs to the server for later access
-- **OPDS catalog** — your Xteink device can browse and download XTC files directly at `/opds`
 - **Docker support** — single-container deployment with persistent storage
 
 ## Supported devices
@@ -36,7 +48,7 @@ pnpm install
 pnpm dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), drop an EPUB file, and start previewing.
+Open [http://localhost:3000](http://localhost:3000), drop an EPUB file, and start converting.
 
 ### Authentication
 
@@ -102,7 +114,16 @@ volumes:
 docker compose up -d
 ```
 
-Open [http://localhost:3000](http://localhost:3000) to use the converter. Converted XTC files saved via "Save to Library" are stored in the volume and served over OPDS.
+Open [http://localhost:3000](http://localhost:3000) to use XTLibre. Converted XTC files are saved to the library and can be sent to the device wirelessly or served over OPDS.
+
+### Sending to device
+
+Go to the **Device** tab to connect to your e-reader. On your device, enter **File Transfer** and select **Join a Network** or **Calibre Wireless**.
+
+- **Direct mode** — your browser connects to the device directly. Use when the server is remote (e.g. Docker on a VPS).
+- **Relay mode** — the server sends files to the device. Use when both are on the same LAN.
+
+You can also enter `crosspoint.local` as the hostname if your network supports mDNS.
 
 ### OPDS endpoint
 
