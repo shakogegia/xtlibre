@@ -617,7 +617,8 @@ export function Converter({
     if (!book?.filename) return
 
     const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
-    const filename = book.title.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 50) + ext
+    const nameBase = book.author ? `${book.author} - ${book.title}` : book.title
+    const filename = nameBase.replace(/[^a-zA-Z0-9._-]/g, "_").substring(0, 80) + ext
     const toastId = `send-${bookId}`
 
     setTransferring(true)
