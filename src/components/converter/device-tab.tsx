@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select"
 import { Smartphone, Wifi, WifiOff, Search, Trash2, Loader2, Radio, Info, HardDrive, Clock, ChevronDown, Settings2 } from "lucide-react"
 import { type Settings } from "@/lib/types"
-import { type RememberedDevice } from "@/lib/device-client"
+import { type RememberedDevice, testDeviceConnection } from "@/lib/device-client"
 import { DeviceFileBrowser } from "@/components/converter/device-file-browser"
 
 interface DeviceStatus {
@@ -69,13 +69,31 @@ export function DeviceTab({
     try { return JSON.parse(s.rememberedDevices) } catch { return [] }
   }, [s.rememberedDevices])
 
-  const fetchDeviceStatus = useCallback(async (host: string, _port: number) => {
+  const fetchDeviceStatus = useCallback(async (host: string, port: number, mode: "direct" | "relay") => {
     try {
-      const resp = await fetch(`/api/device/status?host=${encodeURIComponent(host)}&port=80`)
-      const data: DeviceStatus = await resp.json()
-      setDeviceInfo(data)
-      setConnectionStatus(data.reachable ? "reachable" : "unreachable")
-      return data.reachable
+      if (mode === "direct") {
+        // In Direct mode, test from the browser (important when server is in Docker)
+        const reachable = await testDeviceConnection(host, port)
+        setConnectionStatus(reachable ? "reachable" : "unreachable")
+        if (reachable) {
+          // Try to fetch device info through the server as a bonus (may fail in Docker, that's ok)
+          try {
+            const resp = await fetch(`/api/device/status?host=${encodeURIComponent(host)}&port=80`)
+            const data: DeviceStatus = await resp.json()
+            if (data.reachable) setDeviceInfo(data)
+          } catch { /* server can't reach device — expected in Docker */ }
+        } else {
+          setDeviceInfo(null)
+        }
+        return reachable
+      } else {
+        // In Relay mode, test from the server
+        const resp = await fetch(`/api/device/status?host=${encodeURIComponent(host)}&port=80`)
+        const data: DeviceStatus = await resp.json()
+        setDeviceInfo(data)
+        setConnectionStatus(data.reachable ? "reachable" : "unreachable")
+        return data.reachable
+      }
     } catch {
       setConnectionStatus("unreachable")
       setDeviceInfo(null)
@@ -98,9 +116,11 @@ export function DeviceTab({
         const dev = data.devices[0]
         update({ deviceHost: dev.host, devicePort: dev.port })
         setScanResult(`Found at ${dev.host}`)
-        await fetchDeviceStatus(dev.host, dev.port)
+        await fetchDeviceStatus(dev.host, dev.port, s.deviceTransferMode)
       } else {
-        setScanResult("No devices found. Is File Transfer active on your device?")
+        setScanResult(s.deviceTransferMode === "direct"
+          ? "No devices found. In Direct mode, enter the IP shown on your device manually."
+          : "No devices found. Is File Transfer active on your device?")
         setConnectionStatus("unknown")
       }
     } catch {
@@ -115,16 +135,16 @@ export function DeviceTab({
     setTesting(true)
     setConnectionStatus("unknown")
     setDeviceInfo(null)
-    await fetchDeviceStatus(s.deviceHost, s.devicePort)
+    await fetchDeviceStatus(s.deviceHost, s.devicePort, s.deviceTransferMode)
     setTesting(false)
-  }, [s.deviceHost, s.devicePort, fetchDeviceStatus])
+  }, [s.deviceHost, s.devicePort, s.deviceTransferMode, fetchDeviceStatus])
 
   useEffect(() => {
     const init = async () => {
       if (!s.deviceHost) {
         await handleScan()
       } else {
-        await fetchDeviceStatus(s.deviceHost, s.devicePort)
+        await fetchDeviceStatus(s.deviceHost, s.devicePort, s.deviceTransferMode)
       }
       setInitialCheckDone(true)
     }
@@ -149,8 +169,8 @@ export function DeviceTab({
     update({ deviceHost: dev.host, devicePort: dev.port })
     setConnectionStatus("unknown")
     setDeviceInfo(null)
-    fetchDeviceStatus(dev.host, dev.port)
-  }, [update, fetchDeviceStatus])
+    fetchDeviceStatus(dev.host, dev.port, s.deviceTransferMode)
+  }, [update, fetchDeviceStatus, s.deviceTransferMode])
 
   const disconnect = useCallback(() => {
     update({ deviceHost: "" })
