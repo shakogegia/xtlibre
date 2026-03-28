@@ -663,6 +663,8 @@ export function Converter({
 
             if (event.type === "progress") {
               setTransferProgress({ sent: event.sent, total: event.total, filename: book.title })
+              const pct = Math.round((event.sent / event.total) * 100)
+              toast.loading(`Sending "${book.title}" — ${pct}%`, { id: toastId })
             } else if (event.type === "done") {
               setTransferring(false)
               setTransferProgress(null)
@@ -692,6 +694,8 @@ export function Converter({
           data,
           onProgress: (sent, total) => {
             setTransferProgress({ sent, total, filename: book.title })
+            const pct = Math.round((sent / total) * 100)
+            toast.loading(`Sending "${book.title}" — ${pct}%`, { id: toastId })
           },
           signal: abortController.signal,
         })
