@@ -56,7 +56,7 @@ export async function POST(request: Request) {
         const msg = data.toString()
 
         if (msg === "READY") {
-          const chunkSize = 16384
+          const chunkSize = 2048
           let sent = 0
 
           const sendChunk = () => {

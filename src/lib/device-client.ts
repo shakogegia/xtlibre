@@ -32,7 +32,7 @@ export class DeviceError extends Error {
   }
 }
 
-const CHUNK_SIZE = 16384 // 16 KB
+const CHUNK_SIZE = 2048 // Device firmware buffer limit (matches Calibre plugin cap)
 
 export async function uploadToDevice(options: DeviceUploadOptions): Promise<void> {
   const { host, port, uploadPath, filename, data, onProgress, signal } = options
