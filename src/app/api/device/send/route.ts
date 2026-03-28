@@ -66,22 +66,27 @@ export async function POST(request: Request) {
         const msg = data.toString()
 
         if (msg === "READY") {
+          // Send chunks sequentially — wait for each to be written
+          // before sending the next. This allows cancel to actually
+          // stop the transfer (done flag is checked between chunks).
           const chunkSize = 2048
-          let queued = 0
+          let offset = 0
 
-          const sendChunk = () => {
-            if (done) return
-            if (queued >= fileData.byteLength) return
+          const sendNextChunk = () => {
+            if (done || offset >= fileData.byteLength) return
 
-            const end = Math.min(queued + chunkSize, fileData.byteLength)
-            ws.send(fileData.slice(queued, end))
-            queued = end
+            const end = Math.min(offset + chunkSize, fileData.byteLength)
+            const chunk = fileData.slice(offset, end)
 
-            if (queued < fileData.byteLength) {
-              setImmediate(sendChunk)
-            }
+            ws.send(chunk, (err) => {
+              if (err || done) return
+              offset = end
+              if (offset < fileData.byteLength) {
+                sendNextChunk()
+              }
+            })
           }
-          sendChunk()
+          sendNextChunk()
           return
         }
 
