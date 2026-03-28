@@ -173,7 +173,7 @@ export function LibraryTab({
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
                       </Button>
                     } />
-                    <TooltipContent side="bottom">Edit metadata</TooltipContent>
+                    <TooltipContent side="top">Edit metadata</TooltipContent>
                   </Tooltip>
                   {book.filename && (
                     <Tooltip>
@@ -182,7 +182,7 @@ export function LibraryTab({
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         </Button>
                       } />
-                      <TooltipContent side="bottom">Download</TooltipContent>
+                      <TooltipContent side="top">Download</TooltipContent>
                     </Tooltip>
                   )}
                   {book.filename && (
@@ -197,7 +197,7 @@ export function LibraryTab({
                           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="m22 2-7 20-4-9-9-4z"/></svg>
                         </Button>
                       } />
-                      <TooltipContent side="bottom">{deviceConfigured ? "Send to device" : "Configure device in Device tab"}</TooltipContent>
+                      <TooltipContent side="top">{deviceConfigured ? "Send to device" : "Configure device in Device tab"}</TooltipContent>
                     </Tooltip>
                   )}
                   <AlertDialog>
