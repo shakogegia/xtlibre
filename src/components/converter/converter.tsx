@@ -360,7 +360,20 @@ export function Converter({
     if (!mod || !ren) return
     setLoading(true); setLoadingMsg("Loading book...")
     try {
-      const data = new Uint8Array(await file.arrayBuffer())
+      // Inject a cover page into the EPUB if it doesn't already have one,
+      // so the Xteink device always shows the cover as the first page.
+      let epubFile = file
+      try {
+        const form = new FormData()
+        form.append("file", file)
+        const coverRes = await fetch("/api/epub/ensure-cover", { method: "POST", body: form })
+        if (coverRes.ok && coverRes.status === 200) {
+          const blob = await coverRes.blob()
+          epubFile = new File([blob], file.name, { type: file.type })
+        }
+      } catch { /* use original file if cover injection fails */ }
+
+      const data = new Uint8Array(await epubFile.arrayBuffer())
       const ptr = mod.allocateMemory(data.length)
       mod.HEAPU8.set(data, ptr)
       const result = ren.loadEpubFromMemory(ptr, data.length)
