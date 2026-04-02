@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from "react"
 import { testDeviceConnection } from "@/lib/device-client"
+import { getDeviceOps } from "@/lib/device-ops"
 import { type Settings } from "@/lib/types"
 
 export interface DeviceStatus {
@@ -22,6 +23,9 @@ interface DeviceContextValue {
   scanning: boolean
   testing: boolean
   scanResult: string | null
+
+  deviceFileNames: Set<string>
+  refreshDeviceFiles: () => Promise<void>
 
   // Actions
   scan: () => Promise<void>
@@ -48,6 +52,7 @@ export function DeviceProvider({
   const [scanning, setScanning] = useState(false)
   const [testing, setTesting] = useState(false)
   const [scanResult, setScanResult] = useState<string | null>(null)
+  const [deviceFileNames, setDeviceFileNames] = useState<Set<string>>(new Set())
 
   const fetchStatus = useCallback(async (host: string, port: number, mode: "direct" | "relay") => {
     try {
@@ -116,11 +121,26 @@ export function DeviceProvider({
     setTesting(false)
   }, [settings.deviceHost, settings.devicePort, settings.deviceTransferMode, fetchStatus])
 
+  const refreshDeviceFiles = useCallback(async () => {
+    if (!settings.deviceHost) {
+      setDeviceFileNames(new Set())
+      return
+    }
+    try {
+      const ops = getDeviceOps(settings.deviceTransferMode)
+      const files = await ops.listFiles(settings.deviceHost, settings.deviceUploadPath)
+      setDeviceFileNames(new Set(files.filter(f => !f.isDirectory).map(f => f.name)))
+    } catch {
+      // Silently fail — badge just won't show
+    }
+  }, [settings.deviceHost, settings.deviceUploadPath, settings.deviceTransferMode])
+
   const disconnect = useCallback(() => {
     updateSettings({ deviceHost: "" })
     setConnectionStatus("unknown")
     setDeviceInfo(null)
     setScanResult(null)
+    setDeviceFileNames(new Set())
   }, [updateSettings])
 
   const selectDevice = useCallback((host: string, port: number) => {
@@ -144,6 +164,14 @@ export function DeviceProvider({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (connectionStatus === "reachable") {
+      refreshDeviceFiles()
+    } else {
+      setDeviceFileNames(new Set())
+    }
+  }, [connectionStatus, refreshDeviceFiles])
+
   const value = useMemo(() => ({
     connectionStatus,
     deviceInfo,
@@ -151,12 +179,14 @@ export function DeviceProvider({
     scanning,
     testing,
     scanResult,
+    deviceFileNames,
+    refreshDeviceFiles,
     scan,
     testConnection,
     disconnect,
     selectDevice,
     fetchStatus,
-  }), [connectionStatus, deviceInfo, initialCheckDone, scanning, testing, scanResult, scan, testConnection, disconnect, selectDevice, fetchStatus])
+  }), [connectionStatus, deviceInfo, initialCheckDone, scanning, testing, scanResult, deviceFileNames, refreshDeviceFiles, scan, testConnection, disconnect, selectDevice, fetchStatus])
 
   return (
     <DeviceContext.Provider value={value}>
