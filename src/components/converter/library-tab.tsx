@@ -1,4 +1,5 @@
 import React, { useState } from "react"
+import { Smartphone } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -174,7 +175,9 @@ export function LibraryTab({
                         </Badge>
                       )}
                       {isOnDevice(book) && (
-                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0 text-emerald-600 border-emerald-600/30">On device</Badge>
+                        <Badge variant="outline" className="h-auto text-[9px] p-0.5 text-emerald-600 border-emerald-600/30">
+                          <Smartphone className="w-2.5 h-2.5" />
+                        </Badge>
                       )}
                     </div>
                   </div>
