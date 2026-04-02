@@ -304,6 +304,11 @@ export function DeviceFileBrowser({ host, port, transferMode }: DeviceFileBrowse
       ) : error ? (
         <div className="text-center py-4">
           <p className="text-[10px] text-destructive mb-2">{error}</p>
+          {transferMode === "direct" && (
+            <p className="text-[10px] text-muted-foreground mb-2">
+              File browsing requires the server to reach the device. Switch to Relay mode or use the server on the same network.
+            </p>
+          )}
           <Button variant="outline" size="sm" className="h-6 text-[10px]" onClick={() => loadFiles(currentPath)}>
             Retry
           </Button>

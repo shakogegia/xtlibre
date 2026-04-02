@@ -1,5 +1,5 @@
 import React, { useState } from "react"
-import { Smartphone } from "lucide-react"
+import { Smartphone, Pencil, Download, Trash2, Ellipsis } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import {
   AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogDescription as AlertDialogDesc,
   AlertDialogFooter, AlertDialogCancel, AlertDialogAction,
 } from "@/components/ui/alert-dialog"
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip"
 
 interface LibraryBook {
@@ -52,6 +53,7 @@ export function LibraryTab({
 }: LibraryTabProps) {
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
+  const [deleteConfirm, setDeleteConfirm] = useState<LibraryBook | null>(null)
 
   const isOnDevice = (book: LibraryBook): boolean => {
     if (!book.filename || deviceFileNames.size === 0) return false
@@ -183,24 +185,6 @@ export function LibraryTab({
                   </div>
                 </div>
                 <div className="flex gap-1 opacity-0 group-hover/lib:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                  <Tooltip>
-                    <TooltipTrigger render={
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setEditBook({ id: book.id, title: book.title, author: book.author || "" })}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
-                      </Button>
-                    } />
-                    <TooltipContent side="top">Edit metadata</TooltipContent>
-                  </Tooltip>
-                  {book.filename && (
-                    <Tooltip>
-                      <TooltipTrigger render={
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => downloadXtc(book.id)}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        </Button>
-                      } />
-                      <TooltipContent side="top">Download</TooltipContent>
-                    </Tooltip>
-                  )}
                   {book.filename && (
                     <Tooltip>
                       <TooltipTrigger render={
@@ -216,16 +200,35 @@ export function LibraryTab({
                       <TooltipContent side="top">{deviceConfigured ? "Send to device" : "Configure device in Device tab"}</TooltipContent>
                     </Tooltip>
                   )}
-                  <AlertDialog>
-                    <AlertDialogTrigger render={
-                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground">
+                        <Ellipsis className="w-3 h-3" />
                       </Button>
                     } />
+                    <DropdownMenuContent align="end" side="bottom" className="w-auto min-w-[140px]">
+                      <DropdownMenuItem className="text-sm" onClick={() => setEditBook({ id: book.id, title: book.title, author: book.author || "" })}>
+                        <Pencil className="size-3.5" />
+                        Edit metadata
+                      </DropdownMenuItem>
+                      {book.filename && (
+                        <DropdownMenuItem className="text-sm" onClick={() => downloadXtc(book.id)}>
+                          <Download className="size-3.5" />
+                          Download XTC
+                        </DropdownMenuItem>
+                      )}
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem className="text-sm" variant="destructive" onClick={() => setDeleteConfirm(book)}>
+                        <Trash2 className="size-3.5" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <AlertDialog open={deleteConfirm?.id === book.id} onOpenChange={(open) => { if (!open) setDeleteConfirm(null) }}>
                     <AlertDialogContent size="sm">
                       <AlertDialogHeader>
                         <AlertDialogMedia className="bg-destructive/10 text-destructive dark:bg-destructive/20 dark:text-destructive">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                          <Trash2 className="w-5 h-5" />
                         </AlertDialogMedia>
                         <AlertDialogTitle>Delete book?</AlertDialogTitle>
                         <AlertDialogDesc>
@@ -234,7 +237,7 @@ export function LibraryTab({
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel variant="outline">Cancel</AlertDialogCancel>
-                        <AlertDialogAction variant="destructive" onClick={() => deleteLibraryBook(book.id)}>Delete</AlertDialogAction>
+                        <AlertDialogAction variant="destructive" onClick={() => { deleteLibraryBook(book.id); setDeleteConfirm(null) }}>Delete</AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
