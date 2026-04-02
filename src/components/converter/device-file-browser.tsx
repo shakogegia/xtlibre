@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import {
   AlertDialog, AlertDialogContent,
@@ -11,17 +11,12 @@ import { Spinner } from "@/components/ui/spinner"
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip"
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import { Folder, FolderPlus, FolderInput, Pencil, FileText, BookOpen, Trash2, Upload, Ellipsis, ChevronRight, RefreshCw, Check, X } from "lucide-react"
-
-interface DeviceFile {
-  name: string
-  size: number
-  isDirectory: boolean
-  isEpub: boolean
-}
+import { getDeviceOps, type DeviceFile } from "@/lib/device-ops"
 
 interface DeviceFileBrowserProps {
   host: string
   port: number
+  transferMode: "direct" | "relay"
 }
 
 function formatSize(bytes: number): string {
@@ -34,7 +29,8 @@ function joinPath(base: string, name: string): string {
   return base === "/" ? `/${name}` : `${base}/${name}`
 }
 
-export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
+export function DeviceFileBrowser({ host, port, transferMode }: DeviceFileBrowserProps) {
+  const ops = useMemo(() => getDeviceOps(transferMode), [transferMode])
   const [currentPath, setCurrentPath] = useState("/")
   const [files, setFiles] = useState<DeviceFile[]>([])
   const [loading, setLoading] = useState(false)
@@ -62,19 +58,8 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     setLoading(true)
     setError(null)
     try {
-      const resp = await fetch("/api/device/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path }),
-      })
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({ error: "Request failed" }))
-        throw new Error(data.error || `HTTP ${resp.status}`)
-      }
-      const data = await resp.json()
-      const entries = Array.isArray(data) ? data : []
-      // Sort: directories first, then alphabetical
-      entries.sort((a: DeviceFile, b: DeviceFile) => {
+      const entries = await ops.listFiles(host, path)
+      entries.sort((a, b) => {
         if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1
         return a.name.localeCompare(b.name)
       })
@@ -85,11 +70,11 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     } finally {
       setLoading(false)
     }
-  }, [host, port])
+  }, [host, ops])
 
   useEffect(() => {
     if (host) loadFiles(currentPath)
-  }, [host, port, currentPath, loadFiles])
+  }, [host, currentPath, loadFiles])
 
   const navigateTo = useCallback((name: string) => {
     setCurrentPath(prev => joinPath(prev, name))
@@ -115,15 +100,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     if (!deleteTarget) return
     setDeleting(true)
     try {
-      const resp = await fetch("/api/device/files/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path: deleteTarget.path }),
-      })
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({ error: "Delete failed" }))
-        throw new Error(data.error)
-      }
+      await ops.deleteFile(host, deleteTarget.path)
       setDeleteTarget(null)
       loadFiles(currentPath)
     } catch {
@@ -131,22 +108,14 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     } finally {
       setDeleting(false)
     }
-  }, [deleteTarget, host, port, currentPath, loadFiles])
+  }, [deleteTarget, host, ops, currentPath, loadFiles])
 
   const handleCreateFolder = useCallback(async () => {
     const name = newFolderName.trim()
     if (!name) return
     setCreatingInProgress(true)
     try {
-      const resp = await fetch("/api/device/files/mkdir", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path: currentPath, name }),
-      })
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({ error: "Create failed" }))
-        throw new Error(data.error)
-      }
+      await ops.mkdir(host, currentPath, name)
       setCreatingFolder(false)
       setNewFolderName("")
       loadFiles(currentPath)
@@ -155,7 +124,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     } finally {
       setCreatingInProgress(false)
     }
-  }, [newFolderName, host, port, currentPath, loadFiles])
+  }, [newFolderName, host, ops, currentPath, loadFiles])
 
   const cancelCreateFolder = useCallback(() => {
     setCreatingFolder(false)
@@ -182,15 +151,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     }
     setRenaming(true)
     try {
-      const resp = await fetch("/api/device/files/rename", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path: renameTarget.path, name }),
-      })
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({ error: "Rename failed" }))
-        throw new Error(data.error)
-      }
+      await ops.rename(host, renameTarget.path, name)
       setRenameTarget(null)
       loadFiles(currentPath)
     } catch {
@@ -198,7 +159,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     } finally {
       setRenaming(false)
     }
-  }, [renameTarget, renameName, host, port, currentPath, loadFiles])
+  }, [renameTarget, renameName, host, ops, currentPath, loadFiles])
 
   useEffect(() => {
     if (renameTarget && renameInputRef.current) {
@@ -209,61 +170,35 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     }
   }, [renameTarget])
 
-  const handleUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
     setUploadProgress(0)
-
-    const formData = new FormData()
-    formData.append("file", file)
-    formData.append("host", host)
-    formData.append("path", currentPath)
-
-    const xhr = new XMLHttpRequest()
-    xhr.upload.addEventListener("progress", (ev) => {
-      if (ev.lengthComputable) {
-        // Cap at 99% — 100% only when device confirms receipt
-        setUploadProgress(Math.min(99, Math.round((ev.loaded / ev.total) * 100)))
-      }
-    })
-    xhr.addEventListener("load", () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setUploadProgress(100)
-      }
-    })
-    xhr.addEventListener("loadend", () => {
+    try {
+      await ops.upload(host, currentPath, file, (pct) => setUploadProgress(pct))
+      loadFiles(currentPath)
+    } catch {
+      // error handled silently
+    } finally {
       setUploading(false)
       setUploadProgress(0)
       if (fileInputRef.current) fileInputRef.current.value = ""
-      if (xhr.status >= 200 && xhr.status < 300) {
-        loadFiles(currentPath)
-      }
-    })
-    xhr.open("POST", "/api/device/files/upload")
-    xhr.send(formData)
-  }, [host, currentPath, loadFiles])
+    }
+  }, [host, ops, currentPath, loadFiles])
 
   const loadMoveFolders = useCallback(async (path: string) => {
     setMoveLoading(true)
     try {
-      const resp = await fetch("/api/device/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path }),
-      })
-      if (!resp.ok) throw new Error()
-      const data = await resp.json()
-      const dirs = (Array.isArray(data) ? data : [])
-        .filter((f: DeviceFile) => f.isDirectory)
-        .sort((a: DeviceFile, b: DeviceFile) => a.name.localeCompare(b.name))
+      const data = await ops.listFiles(host, path)
+      const dirs = data.filter((f) => f.isDirectory).sort((a, b) => a.name.localeCompare(b.name))
       setMoveFolders(dirs)
     } catch {
       setMoveFolders([])
     } finally {
       setMoveLoading(false)
     }
-  }, [host, port])
+  }, [host, ops])
 
   const openMoveDialog = useCallback((name: string, path: string) => {
     setMoveTarget({ name, path })
@@ -290,15 +225,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     if (!moveTarget) return
     setMoving(true)
     try {
-      const resp = await fetch("/api/device/files/move", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ host, port, path: moveTarget.path, dest: moveDest }),
-      })
-      if (!resp.ok) {
-        const data = await resp.json().catch(() => ({ error: "Move failed" }))
-        throw new Error(data.error)
-      }
+      await ops.move(host, moveTarget.path, moveDest)
       setMoveTarget(null)
       loadFiles(currentPath)
     } catch {
@@ -306,7 +233,7 @@ export function DeviceFileBrowser({ host, port }: DeviceFileBrowserProps) {
     } finally {
       setMoving(false)
     }
-  }, [moveTarget, host, port, moveDest, currentPath, loadFiles])
+  }, [moveTarget, host, ops, moveDest, currentPath, loadFiles])
 
   const moveDestBreadcrumbs = ["/", ...moveDest.split("/").filter(Boolean)]
 

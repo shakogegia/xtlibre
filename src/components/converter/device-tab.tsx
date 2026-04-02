@@ -343,7 +343,7 @@ export function DeviceTab({
 
       {/* ── FILE BROWSER ── */}
       {s.deviceHost && isConnected && !transferring && (
-        <DeviceFileBrowser host={s.deviceHost} port={s.devicePort} />
+        <DeviceFileBrowser host={s.deviceHost} port={s.devicePort} transferMode={s.deviceTransferMode} />
       )}
     </div>
   )
