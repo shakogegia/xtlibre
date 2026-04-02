@@ -1,4 +1,4 @@
-import React from "react"
+import React, { useCallback } from "react"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { OptionsTab } from "@/components/converter/options-tab"
 import { CalibreTab } from "@/components/converter/calibre-tab"
@@ -8,6 +8,7 @@ import {
   type Settings, type BookMetadata, type TocItem, type Renderer,
 } from "@/lib/types"
 import { type OpdsEntry, type OpdsFeed } from "@/lib/opds"
+import { useDevice } from "@/contexts/device-context"
 
 interface SidebarProps {
   initialTab: string
@@ -93,6 +94,13 @@ export function Sidebar({
   // Device
   sendToDevice, deviceConfigured, transferring, transferProgress, cancelTransfer,
 }: SidebarProps) {
+  const { deviceFileNames, refreshDeviceFiles } = useDevice()
+
+  const sendToDeviceAndRefresh = useCallback(async (bookId: string) => {
+    await sendToDevice(bookId)
+    refreshDeviceFiles()
+  }, [sendToDevice, refreshDeviceFiles])
+
   return (
     <div className="w-[360px] border-r border-border/50 flex flex-col bg-card/50">
       <Tabs urlSync="tab" defaultValue={initialTab} onValueChange={(v) => { if (v === "calibre" && calibreConnected && !opdsFeed && !opdsLoading) opdsBrowse() }} className="flex-1 flex flex-col min-h-0 gap-0">
@@ -114,9 +122,10 @@ export function Sidebar({
             openLibraryEpub={openLibraryEpub} downloadXtc={downloadXtc}
             deleteLibraryBook={deleteLibraryBook}
             updateLibraryBook={updateLibraryBook}
-            sendToDevice={sendToDevice}
+            sendToDevice={sendToDeviceAndRefresh}
             deviceConfigured={deviceConfigured}
             transferring={transferring}
+            deviceFileNames={deviceFileNames}
           />
         </TabsContent>
 

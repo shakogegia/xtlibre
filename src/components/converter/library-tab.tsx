@@ -40,16 +40,25 @@ interface LibraryTabProps {
   sendToDevice: (bookId: string) => void
   deviceConfigured: boolean
   transferring: boolean
+  deviceFileNames: Set<string>
 }
 
 export function LibraryTab({
   fileInputRef, addFiles,
   dragOver, setDragOver,
   opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
-  sendToDevice, deviceConfigured, transferring,
+  sendToDevice, deviceConfigured, transferring, deviceFileNames,
 }: LibraryTabProps) {
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
+
+  const isOnDevice = (book: LibraryBook): boolean => {
+    if (!book.filename || deviceFileNames.size === 0) return false
+    const ext = book.filename.endsWith(".xtch") ? ".xtch" : ".xtc"
+    const nameBase = book.author ? `${book.title} - ${book.author}` : book.title
+    const sanitized = nameBase.replace(/[^a-zA-Z0-9 ._-]/g, "_").substring(0, 80).trim() + ext
+    return deviceFileNames.has(sanitized)
+  }
   return (
     <>
       {/* Upload area */}
@@ -163,6 +172,9 @@ export function LibraryTab({
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
                           {book.file_size != null && ` ${(book.file_size / (1024 * 1024)).toFixed(1)}MB`}
                         </Badge>
+                      )}
+                      {isOnDevice(book) && (
+                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0 text-emerald-600 border-emerald-600/30">On device</Badge>
                       )}
                     </div>
                   </div>
