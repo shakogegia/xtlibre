@@ -68,7 +68,6 @@ export function Converter({
 
   // UI state
   const [wasmReady, setWasmReady] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
   const [dragOver, setDragOver] = useState(false)
@@ -130,7 +129,6 @@ export function Converter({
   const fileIdxRef = useRef(0)
   const loadedFontsRef = useRef<Set<string>>(new Set())
   const loadedPatternsRef = useRef<Set<string>>(new Set())
-  const processingRef = useRef(false)
   const screenDimsRef = useRef({ screenWidth: 480, screenHeight: 800, deviceWidth: 480, deviceHeight: 800 })
 
   // Sync refs
@@ -735,9 +733,6 @@ export function Converter({
   }, [libraryBooks])
 
   const handleGenerateXtc = useCallback(async () => {
-    if (processingRef.current) return
-    processingRef.current = true; setProcessing(true)
-
     const toastId = toast.loading("Submitting conversion job...", { duration: Infinity })
 
     try {
@@ -762,16 +757,21 @@ export function Converter({
 
       toast.loading("Waiting for worker...", { id: toastId })
 
+      // Poll in background — don't block the UI
       const pollStart = Date.now()
       const MAX_POLL_MS = 30 * 60 * 1000 // 30 minutes
 
       const poll = async (): Promise<void> => {
         if (Date.now() - pollStart > MAX_POLL_MS) {
           sessionStorage.removeItem("xtc-active-job")
-          throw new Error("Conversion timed out — worker may not be running")
+          toast.error("Conversion timed out — worker may not be running", { id: toastId, duration: 4000 })
+          return
         }
         const statusRes = await fetch(`/api/convert/${job_id}`)
-        if (!statusRes.ok) throw new Error("Failed to check job status")
+        if (!statusRes.ok) {
+          toast.error("Failed to check job status", { id: toastId, duration: 4000 })
+          return
+        }
         const status = await statusRes.json()
 
         if (status.status === "completed") {
@@ -795,7 +795,8 @@ export function Converter({
 
         if (status.status === "failed") {
           sessionStorage.removeItem("xtc-active-job")
-          throw new Error(status.error || "Conversion failed")
+          toast.error(status.error || "Conversion failed", { id: toastId, duration: 4000 })
+          return
         }
 
         if (status.status === "processing" && status.totalPages > 0) {
@@ -806,12 +807,10 @@ export function Converter({
         return poll()
       }
 
-      await poll()
+      poll()
     } catch (err) {
       console.error("Generate XTC error:", err)
       toast.error(err instanceof Error ? err.message : "Generation failed", { id: toastId, duration: 4000 })
-    } finally {
-      processingRef.current = false; setProcessing(false)
     }
   }, [fetchLibraryBooks, sendToDevice])
 
@@ -879,7 +878,6 @@ export function Converter({
         const status = await res.json()
 
         if (status.status === "pending" || status.status === "processing") {
-          processingRef.current = true; setProcessing(true)
           const toastId = toast.loading("Resuming conversion...", { duration: Infinity })
 
           const pollStart = Date.now()
@@ -916,8 +914,6 @@ export function Converter({
             await poll()
           } catch (err) {
             toast.error(err instanceof Error ? err.message : "Conversion failed", { id: toastId, duration: 4000 })
-          } finally {
-            processingRef.current = false; setProcessing(false)
           }
         } else {
           sessionStorage.removeItem("xtc-active-job")
@@ -1080,7 +1076,7 @@ export function Converter({
           canvasRef={canvasRef} s={s} deviceColor={deviceColor}
           bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
           page={page} pages={pages} goToPage={goToPage}
-          processing={processing} handleGenerateXtc={handleGenerateXtc}
+          handleGenerateXtc={handleGenerateXtc}
         />
       </div>
 

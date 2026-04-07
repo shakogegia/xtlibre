@@ -17,13 +17,12 @@ interface DevicePreviewProps {
   page: number
   pages: number
   goToPage: (pg: number) => void
-  processing: boolean
   handleGenerateXtc: () => void
 }
 
 export function DevicePreview({
   canvasRef, s, deviceColor, bookLoaded, loading, loadingMsg, wasmReady,
-  page, pages, goToPage, processing, handleGenerateXtc,
+  page, pages, goToPage, handleGenerateXtc,
 }: DevicePreviewProps) {
   const dims = getScreenDimensions(s.deviceType, s.orientation)
 
@@ -176,14 +175,10 @@ export function DevicePreview({
           {/* Generate XTC */}
           <Button
             className="w-full h-8 text-[12px] font-medium"
-            disabled={!bookLoaded || processing}
+            disabled={!bookLoaded}
             onClick={handleGenerateXtc}
           >
-            {processing ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            )}
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             {s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
           </Button>
         </div>
