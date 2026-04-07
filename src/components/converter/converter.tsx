@@ -416,7 +416,6 @@ export function Converter({
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const epubs = Array.from(newFiles).filter(f => f.name.toLowerCase().endsWith(".epub"))
     if (epubs.length === 0) return
-    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     const file = epubs[0]
     setFiles([{ file, name: file.name, loaded: false }])
     filesRef.current = [{ file, name: file.name, loaded: false }]
@@ -566,7 +565,6 @@ export function Converter({
   }, [])
 
   const openLibraryEpub = useCallback(async (bookId: string, title: string) => {
-    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     try {
       const res = await fetch(`/api/library/${bookId}/epub`)
       if (!res.ok) {
