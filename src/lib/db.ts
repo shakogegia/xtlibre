@@ -56,6 +56,21 @@ db.exec(`
   )
 `)
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS conversion_jobs (
+    id TEXT PRIMARY KEY,
+    book_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    progress INTEGER NOT NULL DEFAULT 0,
+    total_pages INTEGER NOT NULL DEFAULT 0,
+    settings TEXT NOT NULL,
+    device_type TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
 // Migration: add epub_filename column for pre-existing databases
 try {
   db.exec(`ALTER TABLE books ADD COLUMN epub_filename TEXT`)
@@ -269,3 +284,5 @@ export function getFontsDir(): string {
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
+
+export { db, DATA_DIR }
