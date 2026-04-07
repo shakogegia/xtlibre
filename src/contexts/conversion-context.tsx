@@ -36,11 +36,11 @@ export function ConversionProvider({
   const pollingRef = useRef(new Set<string>())
   const cancelledRef = useRef(false)
 
-  const startPolling = useCallback((jobId: string, bookId: string, bookTitle: string) => {
+  const startPolling = useCallback((jobId: string, bookId: string, bookTitle: string, initial?: JobStatus) => {
     if (pollingRef.current.has(jobId)) return
     pollingRef.current.add(jobId)
 
-    setActiveJobs(prev => new Map(prev).set(bookId, { status: "pending", progress: 0, totalPages: 0 }))
+    setActiveJobs(prev => new Map(prev).set(bookId, initial ?? { status: "pending", progress: 0, totalPages: 0 }))
 
     const pollStart = Date.now()
     const MAX_POLL_MS = 30 * 60 * 1000
@@ -135,7 +135,11 @@ export function ConversionProvider({
         const jobs: { id: string; book_id: string; book_title: string; status: string; progress: number; totalPages: number }[] = await res.json()
 
         for (const job of jobs) {
-          startPolling(job.id, job.book_id, job.book_title)
+          startPolling(job.id, job.book_id, job.book_title, {
+            status: job.status,
+            progress: job.progress,
+            totalPages: job.totalPages,
+          })
         }
       } catch { /* ignore */ }
     }
