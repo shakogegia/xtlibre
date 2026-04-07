@@ -25,6 +25,7 @@ import {
   fetchFeed, downloadEpub,
 } from "@/lib/opds"
 import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
+import { assembleXtc } from "@/lib/xtc-assembler"
 import { uploadToDevice, DeviceError } from "@/lib/device-client"
 import { DeviceProvider } from "@/contexts/device-context"
 import { toast } from "sonner"
@@ -790,7 +791,6 @@ export function Converter({
       const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })!
 
       const pageBuffers: ArrayBuffer[] = []
-      let totalDataSize = 0
 
       for (let pg = 0; pg < pageCount; pg++) {
         toast.loading(`Rendering page ${pg + 1} of ${pageCount}...`, { id: toastId })
@@ -838,7 +838,6 @@ export function Converter({
           ? generateXthData(finalPixels.data, finalCanvas.width, finalCanvas.height)
           : generateXtgData(finalPixels.data, finalCanvas.width, finalCanvas.height, 1)
         pageBuffers.push(pageData)
-        totalDataSize += pageData.byteLength
 
         if (pg % 10 === 0) await new Promise(r => setTimeout(r, 0))
       }
@@ -848,61 +847,15 @@ export function Converter({
         if (chapters[i].endPage < chapters[i].startPage) chapters[i].endPage = chapters[i].startPage
       }
 
-      const headerSize = 56, metadataSize = 256, chapterEntrySize = 96, indexEntrySize = 16
-      const chapterCount = chapters.length
-      const metaOffset = headerSize
-      const chapOffset = metaOffset + metadataSize
-      const indexOffset = chapOffset + chapterCount * chapterEntrySize
-      const dataOffset = indexOffset + pageCount * indexEntrySize
-      const totalSize = dataOffset + totalDataSize
-
-      const buf = new ArrayBuffer(totalSize)
-      const view = new DataView(buf), arr = new Uint8Array(buf)
-
-      view.setUint8(0, 0x58); view.setUint8(1, 0x54); view.setUint8(2, 0x43)
-      view.setUint8(3, isHQ ? 0x48 : 0x00)
-      view.setUint16(4, 1, true); view.setUint16(6, pageCount, true)
-      view.setUint8(8, 0); view.setUint8(9, 1); view.setUint8(10, 0)
-      view.setUint8(11, chapterCount > 0 ? 1 : 0); view.setUint32(12, 1, true)
-
-      view.setBigUint64(16, BigInt(metaOffset), true)
-      view.setBigUint64(24, BigInt(indexOffset), true)
-      view.setBigUint64(32, BigInt(dataOffset), true)
-      view.setBigUint64(40, BigInt(0), true)
-      view.setBigUint64(48, BigInt(chapOffset), true)
-
-      const enc = new TextEncoder()
-      const titleBytes = enc.encode(metaRef.current.title || "Untitled")
-      const authorBytes = enc.encode(metaRef.current.authors || "Unknown")
-      for (let i = 0; i < Math.min(titleBytes.length, 127); i++) arr[metaOffset + i] = titleBytes[i]
-      for (let i = 0; i < Math.min(authorBytes.length, 63); i++) arr[metaOffset + 0x80 + i] = authorBytes[i]
-
-      view.setUint32(metaOffset + 0xF0, Math.floor(Date.now() / 1000), true)
-      view.setUint16(metaOffset + 0xF4, 0, true)
-      view.setUint16(metaOffset + 0xF6, chapterCount, true)
-
-      for (let i = 0; i < chapters.length; i++) {
-        const co = chapOffset + i * chapterEntrySize
-        const nb = enc.encode(chapters[i].name)
-        for (let j = 0; j < Math.min(nb.length, 79); j++) arr[co + j] = nb[j]
-        view.setUint16(co + 0x50, chapters[i].startPage + 1, true)
-        view.setUint16(co + 0x52, chapters[i].endPage + 1, true)
-      }
-
-      let absOff = dataOffset
-      for (let i = 0; i < pageCount; i++) {
-        const iea = indexOffset + i * indexEntrySize
-        view.setBigUint64(iea, BigInt(absOff), true)
-        view.setUint32(iea + 8, pageBuffers[i].byteLength, true)
-        view.setUint16(iea + 12, dw, true); view.setUint16(iea + 14, dh, true)
-        absOff += pageBuffers[i].byteLength
-      }
-
-      let wo = dataOffset
-      for (let i = 0; i < pageCount; i++) {
-        arr.set(new Uint8Array(pageBuffers[i]), wo)
-        wo += pageBuffers[i].byteLength
-      }
+      const buf = assembleXtc({
+        pages: pageBuffers,
+        title: metaRef.current.title || "Untitled",
+        author: metaRef.current.authors || "Unknown",
+        chapters,
+        deviceWidth: dw,
+        deviceHeight: dh,
+        isHQ,
+      })
 
       // Save XTC to library
       toast.loading("Saving to library...", { id: toastId })
