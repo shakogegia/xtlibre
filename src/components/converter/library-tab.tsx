@@ -1,5 +1,5 @@
-import React, { useState } from "react"
-import { Smartphone, Pencil, Download, Trash2, Ellipsis } from "lucide-react"
+import React, { useState, useMemo } from "react"
+import { Smartphone, Pencil, Download, Trash2, Ellipsis, Search } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -54,6 +54,15 @@ export function LibraryTab({
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<LibraryBook | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+
+  const filteredBooks = useMemo(() => {
+    if (!searchQuery.trim()) return libraryBooks
+    const q = searchQuery.toLowerCase()
+    return libraryBooks.filter(b =>
+      b.title.toLowerCase().includes(q) || b.author?.toLowerCase().includes(q)
+    )
+  }, [libraryBooks, searchQuery])
 
   const isOnDevice = (book: LibraryBook): boolean => {
     if (!book.filename || deviceFileNames.size === 0) return false
@@ -127,6 +136,19 @@ export function LibraryTab({
         </Alert>
       )}
 
+      {/* Search */}
+      {libraryBooks.length > 0 && (
+        <div className="relative mb-3">
+          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+          <Input
+            placeholder="Search library..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-7 text-xs pl-7"
+          />
+        </div>
+      )}
+
       {/* Library books */}
       {libraryLoading ? (
         <div className="space-y-1">
@@ -144,10 +166,14 @@ export function LibraryTab({
         <div className="flex items-center justify-center py-4">
           <p className="text-[12px] text-muted-foreground">No saved books yet</p>
         </div>
+      ) : filteredBooks.length === 0 ? (
+        <div className="flex items-center justify-center py-4">
+          <p className="text-[12px] text-muted-foreground">No matches</p>
+        </div>
       ) : (
         <ScrollArea className="flex-1">
           <div className="space-y-1 pb-3">
-            {libraryBooks.map(book => (
+            {filteredBooks.map(book => (
               <div key={book.id} className={`group/lib flex items-center gap-2.5 px-2 py-1.5 rounded-md transition-colors cursor-pointer ${
                 book.id === activeBookId ? "bg-accent text-accent-foreground" : "hover:bg-muted/50"
               }`} onClick={() => book.epub_filename && openLibraryEpub(book.id, book.title)}>
