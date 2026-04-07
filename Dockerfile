@@ -41,20 +41,14 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/public ./public
 
-# Copy better-sqlite3 native binding (prebuilt .node binary)
-COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+# Copy all node_modules (pnpm symlink structure requires full copy)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy conversion worker source, shared libs, and dependencies
 COPY --from=builder /app/src/worker ./src/worker
 COPY --from=builder /app/src/lib ./src/lib
 COPY --from=builder /app/src/contexts ./src/contexts
 COPY --from=builder /app/tsconfig.json ./tsconfig.json
-COPY --from=builder /app/node_modules/canvas ./node_modules/canvas
-COPY --from=builder /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder /app/node_modules/esbuild ./node_modules/esbuild
-COPY --from=builder /app/node_modules/adm-zip ./node_modules/adm-zip
-COPY --from=builder /app/node_modules/fast-xml-parser ./node_modules/fast-xml-parser
-COPY --from=builder /app/node_modules/zod ./node_modules/zod
 
 VOLUME /data
 

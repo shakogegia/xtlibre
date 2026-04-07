@@ -736,29 +736,6 @@ export function Converter({
     }
   }, [libraryBooks])
 
-  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
-    const formData = new FormData()
-    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
-    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
-    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
-    formData.append("title", bookMeta.title || "Untitled")
-    formData.append("author", bookMeta.authors || "Unknown")
-    formData.append("device_type", deviceType)
-    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
-
-    const currentFile = filesRef.current[fileIdxRef.current]
-    if (currentFile?.libraryBookId) {
-      formData.append("epub_book_id", currentFile.libraryBookId)
-    }
-
-    const res = await fetch("/api/library", { method: "POST", body: formData })
-    if (!res.ok) {
-      const text = await res.text().catch(() => "")
-      throw new Error(`Upload failed: ${res.status} ${text}`)
-    }
-    return res.json()
-  }, [])
-
   const handleGenerateXtc = useCallback(async () => {
     if (processingRef.current) return
     processingRef.current = true; setProcessing(true)
@@ -787,7 +764,14 @@ export function Converter({
 
       toast.loading("Waiting for worker...", { id: toastId })
 
+      const pollStart = Date.now()
+      const MAX_POLL_MS = 30 * 60 * 1000 // 30 minutes
+
       const poll = async (): Promise<void> => {
+        if (Date.now() - pollStart > MAX_POLL_MS) {
+          sessionStorage.removeItem("xtc-active-job")
+          throw new Error("Conversion timed out — worker may not be running")
+        }
         const statusRes = await fetch(`/api/convert/${job_id}`)
         if (!statusRes.ok) throw new Error("Failed to check job status")
         const status = await statusRes.json()
@@ -900,8 +884,15 @@ export function Converter({
           processingRef.current = true; setProcessing(true)
           const toastId = toast.loading("Resuming conversion...", { duration: Infinity })
 
+          const pollStart = Date.now()
+          const MAX_POLL_MS = 30 * 60 * 1000 // 30 minutes
+
           const poll = async (): Promise<void> => {
             if (cancelled) return
+            if (Date.now() - pollStart > MAX_POLL_MS) {
+              sessionStorage.removeItem("xtc-active-job")
+              throw new Error("Conversion timed out — worker may not be running")
+            }
             const statusRes = await fetch(`/api/convert/${activeJobId}`)
             if (!statusRes.ok) throw new Error("Failed to check job status")
             const s = await statusRes.json()

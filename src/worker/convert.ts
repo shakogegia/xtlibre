@@ -24,6 +24,7 @@ const POLL_INTERVAL = 500
 fs.mkdirSync(LIBRARY_DIR, { recursive: true })
 const db = new Database(DB_PATH)
 db.pragma("journal_mode = WAL")
+db.pragma("busy_timeout = 5000")
 
 // Ensure conversion_jobs table exists (worker may start before Next.js)
 db.exec(`
@@ -40,6 +41,10 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   )
 `)
+
+// Reset any jobs stuck in 'processing' state (from a previous worker crash)
+const resetCount = db.prepare(`UPDATE conversion_jobs SET status = 'pending' WHERE status = 'processing'`).run().changes
+if (resetCount > 0) console.log(`[worker] Reset ${resetCount} stuck job(s) to pending`)
 
 interface JobRow {
   id: string
