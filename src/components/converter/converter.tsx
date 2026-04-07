@@ -832,7 +832,11 @@ export function Converter({
           finalCanvas = rc
         }
 
-        const pageData = isHQ ? generateXthData(finalCanvas) : generateXtgData(finalCanvas, 1)
+        const finalCtx = finalCanvas.getContext("2d", { willReadFrequently: true })!
+        const finalPixels = finalCtx.getImageData(0, 0, finalCanvas.width, finalCanvas.height)
+        const pageData = isHQ
+          ? generateXthData(finalPixels.data, finalCanvas.width, finalCanvas.height)
+          : generateXtgData(finalPixels.data, finalCanvas.width, finalCanvas.height, 1)
         pageBuffers.push(pageData)
         totalDataSize += pageData.byteLength
 
