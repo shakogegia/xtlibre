@@ -754,7 +754,8 @@ export function Converter({
         throw new Error(err.error || "Failed to submit job")
       }
       const { job_id } = await res.json()
-      sessionStorage.setItem("xtc-active-job", JSON.stringify({ jobId: job_id, bookId }))
+      const bookTitle = metaRef.current.title || currentFile?.name || "Book"
+      sessionStorage.setItem("xtc-active-job", JSON.stringify({ jobId: job_id, bookId, bookTitle }))
 
       // Track this book as having an active job
       setActiveJobs(prev => new Map(prev).set(bookId, { status: "pending", progress: 0, totalPages: 0 }))
@@ -784,7 +785,7 @@ export function Converter({
           const updatedBooks = await fetchLibraryBooks()
           const justSaved = updatedBooks?.[0]
           if (justSaved?.filename && sRef.current.deviceHost) {
-            toast.success(`Conversion complete — ${status.totalPages} pages`, {
+            toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`, {
               duration: 8000,
               action: {
                 label: "Send to device",
@@ -792,7 +793,7 @@ export function Converter({
               },
             })
           } else {
-            toast.success(`Conversion complete — ${status.totalPages} pages`)
+            toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`)
           }
           return
         }
@@ -880,10 +881,10 @@ export function Converter({
       try {
         const raw = sessionStorage.getItem("xtc-active-job")
         if (!raw) return
-        let jobId: string, bookId: string
+        let jobId: string, bookId: string, bookTitle: string
         try {
           const parsed = JSON.parse(raw)
-          jobId = parsed.jobId; bookId = parsed.bookId
+          jobId = parsed.jobId; bookId = parsed.bookId; bookTitle = parsed.bookTitle || "Book"
         } catch {
           // Legacy format (plain job ID string) — can't resume without bookId
           sessionStorage.removeItem("xtc-active-job")
@@ -920,7 +921,7 @@ export function Converter({
               sessionStorage.removeItem("xtc-active-job")
               setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
               await fetchLibraryBooks()
-              toast.success(`Conversion complete — ${s.totalPages} pages`)
+              toast.success(`"${bookTitle}" ready — ${s.totalPages} pages`)
               return
             }
             if (s.status === "failed") {
@@ -1080,6 +1081,7 @@ export function Converter({
         transferring={transferring}
         transferProgress={transferProgress}
         cancelTransfer={cancelTransfer}
+        activeJobs={activeJobs}
       />
 
       {/* Content area */}

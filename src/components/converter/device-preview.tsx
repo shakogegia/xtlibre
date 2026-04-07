@@ -190,14 +190,16 @@ export function DevicePreview({
                 : "In queue..."
               : s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
           </Button>
-          {jobStatus && jobStatus.totalPages > 0 && (
-            <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
-              <div
-                className="h-full bg-foreground/70 transition-all duration-300"
-                style={{ width: `${Math.round((jobStatus.progress / jobStatus.totalPages) * 100)}%` }}
-              />
-            </div>
-          )}
+          <div className="w-full h-1 rounded-full bg-muted overflow-hidden transition-opacity duration-300" style={{ opacity: jobStatus && jobStatus.totalPages > 0 ? 1 : 0 }}>
+            <div
+              className="h-full bg-foreground/70 transition-all duration-300"
+              style={{
+                width: jobStatus && jobStatus.totalPages > 0
+                  ? `${Math.round((jobStatus.progress / jobStatus.totalPages) * 100)}%`
+                  : "0%",
+              }}
+            />
+          </div>
         </div>
       </div>
 

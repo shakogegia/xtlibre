@@ -43,13 +43,14 @@ interface LibraryTabProps {
   deviceConfigured: boolean
   transferring: boolean
   deviceFileNames: Set<string>
+  activeJobs: Map<string, { status: string; progress: number; totalPages: number }>
 }
 
 export function LibraryTab({
   fileInputRef, addFiles,
   dragOver, setDragOver,
   opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
-  sendToDevice, deviceConfigured, transferring, deviceFileNames,
+  sendToDevice, deviceConfigured, transferring, deviceFileNames, activeJobs,
 }: LibraryTabProps) {
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
@@ -200,6 +201,14 @@ export function LibraryTab({
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
                           {book.file_size != null && ` ${(book.file_size / (1024 * 1024)).toFixed(1)}MB`}
+                        </Badge>
+                      )}
+                      {activeJobs.has(book.id) && (
+                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0 text-amber-600 border-amber-600/30 gap-0.5">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          {activeJobs.get(book.id)!.status === "processing" && activeJobs.get(book.id)!.totalPages > 0
+                            ? `${activeJobs.get(book.id)!.progress}/${activeJobs.get(book.id)!.totalPages}`
+                            : "queue"}
                         </Badge>
                       )}
                       {isOnDevice(book) && (

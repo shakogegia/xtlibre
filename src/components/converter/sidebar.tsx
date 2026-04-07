@@ -73,6 +73,9 @@ interface SidebarProps {
   transferring: boolean
   transferProgress: { sent: number; total: number; filename: string } | null
   cancelTransfer: () => void
+
+  // Conversion jobs
+  activeJobs: Map<string, { status: string; progress: number; totalPages: number }>
 }
 
 export function Sidebar({
@@ -93,6 +96,8 @@ export function Sidebar({
   activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
   // Device
   sendToDevice, deviceConfigured, transferring, transferProgress, cancelTransfer,
+  // Conversion jobs
+  activeJobs,
 }: SidebarProps) {
   const { deviceFileNames, refreshDeviceFiles } = useDevice()
 
@@ -126,6 +131,7 @@ export function Sidebar({
             deviceConfigured={deviceConfigured}
             transferring={transferring}
             deviceFileNames={deviceFileNames}
+            activeJobs={activeJobs}
           />
         </TabsContent>
 
