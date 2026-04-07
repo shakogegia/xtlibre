@@ -12,6 +12,7 @@
     "@base-ui/react": "^1.3.0",
     "adm-zip": "^0.5.16",
     "better-sqlite3": "^12.8.0",
+    "canvas": "^3.2.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fast-xml-parser": "^5.5.9",
@@ -30,7 +31,8 @@
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "better-sqlite3"
+      "better-sqlite3",
+      "canvas"
     ]
   },
   "devDependencies": {
