@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react"
-import { Smartphone, Pencil, Download, Trash2, Ellipsis, Search } from "lucide-react"
+import { useConversion } from "@/contexts/conversion-context"
+import { Smartphone, Pencil, Download, Trash2, Ellipsis, Search, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,15 +44,15 @@ interface LibraryTabProps {
   deviceConfigured: boolean
   transferring: boolean
   deviceFileNames: Set<string>
-  activeJobs: Map<string, { status: string; progress: number; totalPages: number }>
 }
 
 export function LibraryTab({
   fileInputRef, addFiles,
   dragOver, setDragOver,
   opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
-  sendToDevice, deviceConfigured, transferring, deviceFileNames, activeJobs,
+  sendToDevice, deviceConfigured, transferring, deviceFileNames,
 }: LibraryTabProps) {
+  const { activeJobs, submitJob } = useConversion()
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<LibraryBook | null>(null)
@@ -197,7 +198,7 @@ export function LibraryTab({
                       {book.epub_filename && (
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">EPUB</Badge>
                       )}
-                      {book.filename && (
+                      {book.filename && !activeJobs.has(book.id) && (
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
                           {book.file_size != null && ` ${(book.file_size / (1024 * 1024)).toFixed(1)}MB`}
@@ -246,6 +247,12 @@ export function LibraryTab({
                         <Pencil className="size-3.5" />
                         Edit metadata
                       </DropdownMenuItem>
+                      {book.epub_filename && !activeJobs.has(book.id) && (
+                        <DropdownMenuItem className="text-sm" onClick={() => submitJob(book.id, book.title)}>
+                          <RefreshCw className="size-3.5" />
+                          Convert
+                        </DropdownMenuItem>
+                      )}
                       {book.filename && (
                         <DropdownMenuItem className="text-sm" onClick={() => downloadXtc(book.id)}>
                           <Download className="size-3.5" />
