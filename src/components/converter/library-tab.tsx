@@ -104,11 +104,25 @@ export function LibraryTab({
         />
       </div>
 
-      {/* Separator */}
+      {/* Separator + Convert All */}
       <div className="flex items-center gap-2 mb-3">
         <div className="flex-1 h-px bg-border/50" />
         <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Saved</span>
         <div className="flex-1 h-px bg-border/50" />
+        {libraryBooks.some(b => b.epub_filename && !activeJobs.has(b.id)) && (
+          <button
+            className="text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            onClick={() => {
+              for (const book of libraryBooks) {
+                if (book.epub_filename && !activeJobs.has(book.id)) {
+                  submitJob(book.id, book.title)
+                }
+              }
+            }}
+          >
+            Convert all
+          </button>
+        )}
       </div>
 
       {/* OPDS info */}
