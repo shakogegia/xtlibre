@@ -66,6 +66,9 @@ export function Converter({
   const [pages, setPages] = useState(0)
   const [bookLoaded, setBookLoaded] = useState(false)
 
+  // Conversion job tracking per book
+  const [activeJobs, setActiveJobs] = useState<Map<string, { status: string; progress: number; totalPages: number }>>(new Map())
+
   // UI state
   const [wasmReady, setWasmReady] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -733,16 +736,14 @@ export function Converter({
   }, [libraryBooks])
 
   const handleGenerateXtc = useCallback(async () => {
-    const toastId = toast.loading("Submitting conversion job...", { duration: Infinity })
+    const currentFile = filesRef.current[fileIdxRef.current]
+    const bookId = currentFile?.libraryBookId
+    if (!bookId) {
+      toast.error("EPUB not saved to library yet. Please wait and try again.")
+      return
+    }
 
     try {
-      const currentFile = filesRef.current[fileIdxRef.current]
-      const bookId = currentFile?.libraryBookId
-      if (!bookId) {
-        toast.error("EPUB not saved to library yet. Please wait and try again.", { id: toastId, duration: 4000 })
-        return
-      }
-
       const res = await fetch("/api/convert", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -753,9 +754,10 @@ export function Converter({
         throw new Error(err.error || "Failed to submit job")
       }
       const { job_id } = await res.json()
-      sessionStorage.setItem("xtc-active-job", job_id)
+      sessionStorage.setItem("xtc-active-job", JSON.stringify({ jobId: job_id, bookId }))
 
-      toast.loading("Waiting for worker...", { id: toastId })
+      // Track this book as having an active job
+      setActiveJobs(prev => new Map(prev).set(bookId, { status: "pending", progress: 0, totalPages: 0 }))
 
       // Poll in background — don't block the UI
       const pollStart = Date.now()
@@ -764,23 +766,25 @@ export function Converter({
       const poll = async (): Promise<void> => {
         if (Date.now() - pollStart > MAX_POLL_MS) {
           sessionStorage.removeItem("xtc-active-job")
-          toast.error("Conversion timed out — worker may not be running", { id: toastId, duration: 4000 })
+          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+          toast.error("Conversion timed out — worker may not be running")
           return
         }
         const statusRes = await fetch(`/api/convert/${job_id}`)
         if (!statusRes.ok) {
-          toast.error("Failed to check job status", { id: toastId, duration: 4000 })
+          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+          toast.error("Failed to check job status")
           return
         }
         const status = await statusRes.json()
 
         if (status.status === "completed") {
           sessionStorage.removeItem("xtc-active-job")
+          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
           const updatedBooks = await fetchLibraryBooks()
           const justSaved = updatedBooks?.[0]
           if (justSaved?.filename && sRef.current.deviceHost) {
             toast.success(`Conversion complete — ${status.totalPages} pages`, {
-              id: toastId,
               duration: 8000,
               action: {
                 label: "Send to device",
@@ -788,20 +792,24 @@ export function Converter({
               },
             })
           } else {
-            toast.success(`Conversion complete — ${status.totalPages} pages`, { id: toastId, duration: 4000 })
+            toast.success(`Conversion complete — ${status.totalPages} pages`)
           }
           return
         }
 
         if (status.status === "failed") {
           sessionStorage.removeItem("xtc-active-job")
-          toast.error(status.error || "Conversion failed", { id: toastId, duration: 4000 })
+          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+          toast.error(status.error || "Conversion failed")
           return
         }
 
-        if (status.status === "processing" && status.totalPages > 0) {
-          toast.loading(`Rendering page ${status.progress} of ${status.totalPages}...`, { id: toastId })
-        }
+        // Update job tracking for button/progress bar state
+        setActiveJobs(prev => new Map(prev).set(bookId, {
+          status: status.status,
+          progress: status.progress,
+          totalPages: status.totalPages,
+        }))
 
         await new Promise(r => setTimeout(r, 500))
         return poll()
@@ -810,7 +818,7 @@ export function Converter({
       poll()
     } catch (err) {
       console.error("Generate XTC error:", err)
-      toast.error(err instanceof Error ? err.message : "Generation failed", { id: toastId, duration: 4000 })
+      toast.error(err instanceof Error ? err.message : "Generation failed")
     }
   }, [fetchLibraryBooks, sendToDevice])
 
@@ -870,51 +878,64 @@ export function Converter({
     let cancelled = false
     async function checkActiveJobs() {
       try {
-        const activeJobId = sessionStorage.getItem("xtc-active-job")
-        if (!activeJobId) return
+        const raw = sessionStorage.getItem("xtc-active-job")
+        if (!raw) return
+        let jobId: string, bookId: string
+        try {
+          const parsed = JSON.parse(raw)
+          jobId = parsed.jobId; bookId = parsed.bookId
+        } catch {
+          // Legacy format (plain job ID string) — can't resume without bookId
+          sessionStorage.removeItem("xtc-active-job")
+          return
+        }
+        if (!jobId || !bookId) { sessionStorage.removeItem("xtc-active-job"); return }
 
-        const res = await fetch(`/api/convert/${activeJobId}`)
+        const res = await fetch(`/api/convert/${jobId}`)
         if (!res.ok) { sessionStorage.removeItem("xtc-active-job"); return }
         const status = await res.json()
 
         if (status.status === "pending" || status.status === "processing") {
-          const toastId = toast.loading("Resuming conversion...", { duration: Infinity })
+          setActiveJobs(prev => new Map(prev).set(bookId, { status: status.status, progress: status.progress, totalPages: status.totalPages }))
 
           const pollStart = Date.now()
-          const MAX_POLL_MS = 30 * 60 * 1000 // 30 minutes
+          const MAX_POLL_MS = 30 * 60 * 1000
 
           const poll = async (): Promise<void> => {
             if (cancelled) return
             if (Date.now() - pollStart > MAX_POLL_MS) {
               sessionStorage.removeItem("xtc-active-job")
-              throw new Error("Conversion timed out — worker may not be running")
+              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+              toast.error("Conversion timed out — worker may not be running")
+              return
             }
-            const statusRes = await fetch(`/api/convert/${activeJobId}`)
-            if (!statusRes.ok) throw new Error("Failed to check job status")
+            const statusRes = await fetch(`/api/convert/${jobId}`)
+            if (!statusRes.ok) {
+              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+              return
+            }
             const s = await statusRes.json()
 
             if (s.status === "completed") {
               sessionStorage.removeItem("xtc-active-job")
+              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
               await fetchLibraryBooks()
-              toast.success(`Conversion complete — ${s.totalPages} pages`, { id: toastId, duration: 4000 })
+              toast.success(`Conversion complete — ${s.totalPages} pages`)
               return
             }
             if (s.status === "failed") {
               sessionStorage.removeItem("xtc-active-job")
-              throw new Error(s.error || "Conversion failed")
+              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+              toast.error(s.error || "Conversion failed")
+              return
             }
-            if (s.totalPages > 0) {
-              toast.loading(`Rendering page ${s.progress} of ${s.totalPages}...`, { id: toastId })
-            }
+
+            setActiveJobs(prev => new Map(prev).set(bookId, { status: s.status, progress: s.progress, totalPages: s.totalPages }))
             await new Promise(r => setTimeout(r, 500))
             return poll()
           }
 
-          try {
-            await poll()
-          } catch (err) {
-            toast.error(err instanceof Error ? err.message : "Conversion failed", { id: toastId, duration: 4000 })
-          }
+          poll()
         } else {
           sessionStorage.removeItem("xtc-active-job")
         }
@@ -1077,6 +1098,7 @@ export function Converter({
           bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
           page={page} pages={pages} goToPage={goToPage}
           handleGenerateXtc={handleGenerateXtc}
+          jobStatus={activeJobs.get(filesRef.current[fileIdxRef.current]?.libraryBookId ?? "") ?? null}
         />
       </div>
 

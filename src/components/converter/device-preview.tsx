@@ -18,11 +18,12 @@ interface DevicePreviewProps {
   pages: number
   goToPage: (pg: number) => void
   handleGenerateXtc: () => void
+  jobStatus: { status: string; progress: number; totalPages: number } | null
 }
 
 export function DevicePreview({
   canvasRef, s, deviceColor, bookLoaded, loading, loadingMsg, wasmReady,
-  page, pages, goToPage, handleGenerateXtc,
+  page, pages, goToPage, handleGenerateXtc, jobStatus,
 }: DevicePreviewProps) {
   const dims = getScreenDimensions(s.deviceType, s.orientation)
 
@@ -175,12 +176,28 @@ export function DevicePreview({
           {/* Generate XTC */}
           <Button
             className="w-full h-8 text-[12px] font-medium"
-            disabled={!bookLoaded}
+            disabled={!bookLoaded || !!jobStatus}
             onClick={handleGenerateXtc}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            {s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
+            {jobStatus ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            )}
+            {jobStatus
+              ? jobStatus.status === "processing" && jobStatus.totalPages > 0
+                ? `Rendering ${jobStatus.progress}/${jobStatus.totalPages}...`
+                : "In queue..."
+              : s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
           </Button>
+          {jobStatus && jobStatus.totalPages > 0 && (
+            <div className="w-full h-1 rounded-full bg-muted overflow-hidden">
+              <div
+                className="h-full bg-foreground/70 transition-all duration-300"
+                style={{ width: `${Math.round((jobStatus.progress / jobStatus.totalPages) * 100)}%` }}
+              />
+            </div>
+          )}
         </div>
       </div>
 
