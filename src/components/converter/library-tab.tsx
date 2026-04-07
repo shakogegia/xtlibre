@@ -209,9 +209,7 @@ export function LibraryTab({
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {book.author && <span className="text-[10px] text-muted-foreground truncate">{book.author}</span>}
                     <div className="flex gap-1">
-                      {book.epub_filename && (
-                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">EPUB</Badge>
-                      )}
+
                       {book.filename && !activeJobs.has(book.id) && (
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
