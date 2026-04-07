@@ -24,8 +24,7 @@ import {
   fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
   fetchFeed, downloadEpub,
 } from "@/lib/opds"
-import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
-import { assembleXtc } from "@/lib/xtc-assembler"
+import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData } from "@/lib/image-processing"
 import { uploadToDevice, DeviceError } from "@/lib/device-client"
 import { DeviceProvider } from "@/contexts/device-context"
 import { toast } from "sonner"
@@ -761,132 +760,78 @@ export function Converter({
   }, [])
 
   const handleGenerateXtc = useCallback(async () => {
-    const ren = rendererRef.current, mod = moduleRef.current
-    if (!ren || !mod || processingRef.current) return
+    if (processingRef.current) return
     processingRef.current = true; setProcessing(true)
 
-    const toastId = toast.loading("Preparing...", { duration: Infinity })
-    const startTime = performance.now()
-    const currentPage = ren.getCurrentPage()
+    const toastId = toast.loading("Submitting conversion job...", { duration: Infinity })
 
     try {
-      const settings = sRef.current
-      const bits = settings.qualityMode === "hq" ? 2 : 1
-      const isHQ = settings.qualityMode === "hq"
-      const pageCount = ren.getPageCount()
-      const { screenWidth: sw, screenHeight: sh, deviceWidth: dw, deviceHeight: dh } = screenDimsRef.current
-
-      const chapters: { name: string; startPage: number; endPage: number }[] = []
-      function extractChapters(items: TocItem[]) {
-        for (const item of items) {
-          chapters.push({ name: item.title.substring(0, 79), startPage: Math.max(0, Math.min(item.page, pageCount - 1)), endPage: -1 })
-          if (item.children?.length) extractChapters(item.children)
-        }
-      }
-      extractChapters(tocRef.current)
-      chapters.sort((a, b) => a.startPage - b.startPage)
-
-      const tempCanvas = document.createElement("canvas")
-      tempCanvas.width = sw; tempCanvas.height = sh
-      const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })!
-
-      const pageBuffers: ArrayBuffer[] = []
-
-      for (let pg = 0; pg < pageCount; pg++) {
-        toast.loading(`Rendering page ${pg + 1} of ${pageCount}...`, { id: toastId })
-
-        ren.goToPage(pg); ren.renderCurrentPage()
-        const buffer = ren.getFrameBuffer()
-        const imageData = tempCtx.createImageData(sw, sh)
-        imageData.data.set(buffer)
-        tempCtx.putImageData(imageData, 0, 0)
-
-        if (settings.enableDithering) {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          applyDitheringSyncToData(img.data, sw, sh, bits, settings.ditherStrength, isHQ)
-          tempCtx.putImageData(img, 0, 0)
-        } else {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          quantizeImageData(img.data, bits, isHQ)
-          tempCtx.putImageData(img, 0, 0)
-        }
-
-        if (settings.enableNegative) {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          applyNegativeToData(img.data)
-          tempCtx.putImageData(img, 0, 0)
-        }
-
-        drawProgressIndicator(tempCtx, settings, pg, pageCount, sw, sh, tocRef.current)
-
-        let finalCanvas: HTMLCanvasElement = tempCanvas
-        const rot = settings.orientation
-        if (rot !== 0) {
-          const rc = document.createElement("canvas")
-          rc.width = dw; rc.height = dh
-          const rCtx = rc.getContext("2d")!
-          if (rot === 90) { rCtx.translate(dw, 0); rCtx.rotate(Math.PI / 2) }
-          else if (rot === 180) { rCtx.translate(dw, dh); rCtx.rotate(Math.PI) }
-          else if (rot === 270) { rCtx.translate(0, dh); rCtx.rotate(3 * Math.PI / 2) }
-          rCtx.drawImage(tempCanvas, 0, 0)
-          finalCanvas = rc
-        }
-
-        const finalCtx = finalCanvas.getContext("2d", { willReadFrequently: true })!
-        const finalPixels = finalCtx.getImageData(0, 0, finalCanvas.width, finalCanvas.height)
-        const pageData = isHQ
-          ? generateXthData(finalPixels.data, finalCanvas.width, finalCanvas.height)
-          : generateXtgData(finalPixels.data, finalCanvas.width, finalCanvas.height, 1)
-        pageBuffers.push(pageData)
-
-        if (pg % 10 === 0) await new Promise(r => setTimeout(r, 0))
+      const currentFile = filesRef.current[fileIdxRef.current]
+      const bookId = currentFile?.libraryBookId
+      if (!bookId) {
+        toast.error("EPUB not saved to library yet. Please wait and try again.", { id: toastId, duration: 4000 })
+        return
       }
 
-      for (let i = 0; i < chapters.length; i++) {
-        chapters[i].endPage = i < chapters.length - 1 ? chapters[i + 1].startPage - 1 : pageCount - 1
-        if (chapters[i].endPage < chapters[i].startPage) chapters[i].endPage = chapters[i].startPage
-      }
-
-      const buf = assembleXtc({
-        pages: pageBuffers,
-        title: metaRef.current.title || "Untitled",
-        author: metaRef.current.authors || "Unknown",
-        chapters,
-        deviceWidth: dw,
-        deviceHeight: dh,
-        isHQ,
+      const res = await fetch("/api/convert", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ book_id: bookId }),
       })
-
-      // Save XTC to library
-      toast.loading("Saving to library...", { id: toastId })
-      await saveToLibrary(buf, metaRef.current, settings.deviceType)
-      const updatedBooks = await fetchLibraryBooks()
-
-      // Restore preview to current page
-      ren.goToPage(currentPage)
-      renderPreview()
-
-      const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
-      const justSaved = updatedBooks?.[0]
-      if (justSaved?.filename && sRef.current.deviceHost) {
-        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, {
-          id: toastId,
-          duration: 8000,
-          action: {
-            label: "Send to device",
-            onClick: () => sendToDevice(justSaved.id),
-          },
-        })
-      } else {
-        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, { id: toastId, duration: 4000 })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ error: "Unknown error" }))
+        throw new Error(err.error || "Failed to submit job")
       }
+      const { job_id } = await res.json()
+      sessionStorage.setItem("xtc-active-job", job_id)
+
+      toast.loading("Waiting for worker...", { id: toastId })
+
+      const poll = async (): Promise<void> => {
+        const statusRes = await fetch(`/api/convert/${job_id}`)
+        if (!statusRes.ok) throw new Error("Failed to check job status")
+        const status = await statusRes.json()
+
+        if (status.status === "completed") {
+          sessionStorage.removeItem("xtc-active-job")
+          const updatedBooks = await fetchLibraryBooks()
+          const justSaved = updatedBooks?.[0]
+          if (justSaved?.filename && sRef.current.deviceHost) {
+            toast.success(`Conversion complete — ${status.totalPages} pages`, {
+              id: toastId,
+              duration: 8000,
+              action: {
+                label: "Send to device",
+                onClick: () => sendToDevice(justSaved.id),
+              },
+            })
+          } else {
+            toast.success(`Conversion complete — ${status.totalPages} pages`, { id: toastId, duration: 4000 })
+          }
+          return
+        }
+
+        if (status.status === "failed") {
+          sessionStorage.removeItem("xtc-active-job")
+          throw new Error(status.error || "Conversion failed")
+        }
+
+        if (status.status === "processing" && status.totalPages > 0) {
+          toast.loading(`Rendering page ${status.progress} of ${status.totalPages}...`, { id: toastId })
+        }
+
+        await new Promise(r => setTimeout(r, 500))
+        return poll()
+      }
+
+      await poll()
     } catch (err) {
       console.error("Generate XTC error:", err)
-      toast.error("Generation failed", { id: toastId, duration: 4000 })
+      toast.error(err instanceof Error ? err.message : "Generation failed", { id: toastId, duration: 4000 })
     } finally {
       processingRef.current = false; setProcessing(false)
     }
-  }, [saveToLibrary, fetchLibraryBooks, renderPreview, sendToDevice])
+  }, [fetchLibraryBooks, sendToDevice])
 
   // ── Initialization ──
 
@@ -938,6 +883,61 @@ export function Converter({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [s.deviceType, s.orientation])
+
+  // Resume polling for any active conversion jobs on mount
+  useEffect(() => {
+    let cancelled = false
+    async function checkActiveJobs() {
+      try {
+        const activeJobId = sessionStorage.getItem("xtc-active-job")
+        if (!activeJobId) return
+
+        const res = await fetch(`/api/convert/${activeJobId}`)
+        if (!res.ok) { sessionStorage.removeItem("xtc-active-job"); return }
+        const status = await res.json()
+
+        if (status.status === "pending" || status.status === "processing") {
+          processingRef.current = true; setProcessing(true)
+          const toastId = toast.loading("Resuming conversion...", { duration: Infinity })
+
+          const poll = async (): Promise<void> => {
+            if (cancelled) return
+            const statusRes = await fetch(`/api/convert/${activeJobId}`)
+            if (!statusRes.ok) throw new Error("Failed to check job status")
+            const s = await statusRes.json()
+
+            if (s.status === "completed") {
+              sessionStorage.removeItem("xtc-active-job")
+              await fetchLibraryBooks()
+              toast.success(`Conversion complete — ${s.totalPages} pages`, { id: toastId, duration: 4000 })
+              return
+            }
+            if (s.status === "failed") {
+              sessionStorage.removeItem("xtc-active-job")
+              throw new Error(s.error || "Conversion failed")
+            }
+            if (s.totalPages > 0) {
+              toast.loading(`Rendering page ${s.progress} of ${s.totalPages}...`, { id: toastId })
+            }
+            await new Promise(r => setTimeout(r, 500))
+            return poll()
+          }
+
+          try {
+            await poll()
+          } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Conversion failed", { id: toastId, duration: 4000 })
+          } finally {
+            processingRef.current = false; setProcessing(false)
+          }
+        } else {
+          sessionStorage.removeItem("xtc-active-job")
+        }
+      } catch { /* ignore */ }
+    }
+    checkActiveJobs()
+    return () => { cancelled = true }
+  }, [fetchLibraryBooks])
 
   // Handle quality mode changes
   const handleQualityChange = useCallback((mode: "fast" | "hq") => {
