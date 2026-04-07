@@ -12,6 +12,7 @@ fs.mkdirSync(LIBRARY_DIR, { recursive: true })
 
 const db = new Database(DB_PATH)
 db.pragma("journal_mode = WAL")
+db.pragma("busy_timeout = 5000")
 db.pragma("foreign_keys = ON")
 
 db.exec(`
@@ -53,6 +54,21 @@ db.exec(`
     name TEXT NOT NULL,
     filename TEXT NOT NULL,
     created_at TEXT DEFAULT (datetime('now'))
+  )
+`)
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS conversion_jobs (
+    id TEXT PRIMARY KEY,
+    book_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    progress INTEGER NOT NULL DEFAULT 0,
+    total_pages INTEGER NOT NULL DEFAULT 0,
+    settings TEXT NOT NULL,
+    device_type TEXT NOT NULL,
+    error TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
   )
 `)
 
@@ -269,3 +285,5 @@ export function getFontsDir(): string {
   fs.mkdirSync(dir, { recursive: true })
   return dir
 }
+
+export { db, DATA_DIR }

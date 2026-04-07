@@ -73,6 +73,7 @@ interface SidebarProps {
   transferring: boolean
   transferProgress: { sent: number; total: number; filename: string } | null
   cancelTransfer: () => void
+
 }
 
 export function Sidebar({
@@ -113,7 +114,7 @@ export function Sidebar({
           </TabsList>
         </div>
 
-        <TabsContent value="library" className="flex-1 min-h-0 overflow-y-auto px-4 pt-3">
+        <TabsContent value="library" className="flex-1 min-h-0 flex flex-col px-4 pt-3">
           <LibraryTab
             fileInputRef={fileInputRef} addFiles={addFiles}
             dragOver={dragOver} setDragOver={setDragOver}

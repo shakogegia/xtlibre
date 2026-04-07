@@ -24,9 +24,10 @@ import {
   fetchCalibreConfig, saveCalibreConfig, deleteCalibreConfig,
   fetchFeed, downloadEpub,
 } from "@/lib/opds"
-import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData, generateXtgData, generateXthData } from "@/lib/image-processing"
+import { applyDitheringSyncToData, quantizeImageData, applyNegativeToData } from "@/lib/image-processing"
 import { uploadToDevice, DeviceError } from "@/lib/device-client"
 import { DeviceProvider } from "@/contexts/device-context"
+import { ConversionProvider } from "@/contexts/conversion-context"
 import { toast } from "sonner"
 import { getPatternForLang, drawProgressIndicator } from "@/lib/progress-bar"
 
@@ -68,7 +69,6 @@ export function Converter({
 
   // UI state
   const [wasmReady, setWasmReady] = useState(false)
-  const [processing, setProcessing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [loadingMsg, setLoadingMsg] = useState("")
   const [dragOver, setDragOver] = useState(false)
@@ -130,7 +130,6 @@ export function Converter({
   const fileIdxRef = useRef(0)
   const loadedFontsRef = useRef<Set<string>>(new Set())
   const loadedPatternsRef = useRef<Set<string>>(new Set())
-  const processingRef = useRef(false)
   const screenDimsRef = useRef({ screenWidth: 480, screenHeight: 800, deviceWidth: 480, deviceHeight: 800 })
 
   // Sync refs
@@ -416,7 +415,6 @@ export function Converter({
   const addFiles = useCallback((newFiles: FileList | File[]) => {
     const epubs = Array.from(newFiles).filter(f => f.name.toLowerCase().endsWith(".epub"))
     if (epubs.length === 0) return
-    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     const file = epubs[0]
     setFiles([{ file, name: file.name, loaded: false }])
     filesRef.current = [{ file, name: file.name, loaded: false }]
@@ -566,7 +564,6 @@ export function Converter({
   }, [])
 
   const openLibraryEpub = useCallback(async (bookId: string, title: string) => {
-    if (processingRef.current) { toast.warning("Please wait for XTC generation to finish"); return }
     try {
       const res = await fetch(`/api/library/${bookId}/epub`)
       if (!res.ok) {
@@ -736,200 +733,13 @@ export function Converter({
     }
   }, [libraryBooks])
 
-  const saveToLibrary = useCallback(async (xtcData: ArrayBuffer, bookMeta: BookMetadata, deviceType: string) => {
-    const formData = new FormData()
-    const ext = sRef.current.qualityMode === "hq" ? ".xtch" : ".xtc"
-    const filename = (bookMeta.title || "book").replace(/[^a-zA-Z0-9\u0080-\uFFFF]/g, "_").substring(0, 50) + ext
-    formData.append("file", new Blob([xtcData], { type: "application/octet-stream" }), filename)
-    formData.append("title", bookMeta.title || "Untitled")
-    formData.append("author", bookMeta.authors || "Unknown")
-    formData.append("device_type", deviceType)
-    formData.append("original_epub_name", filesRef.current[fileIdxRef.current]?.name || "")
-
+  const getCurrentBookInfo = useCallback(() => {
     const currentFile = filesRef.current[fileIdxRef.current]
-    if (currentFile?.libraryBookId) {
-      formData.append("epub_book_id", currentFile.libraryBookId)
+    return {
+      bookId: currentFile?.libraryBookId ?? null,
+      bookTitle: metaRef.current.title || currentFile?.name || "Book",
     }
-
-    const res = await fetch("/api/library", { method: "POST", body: formData })
-    if (!res.ok) {
-      const text = await res.text().catch(() => "")
-      throw new Error(`Upload failed: ${res.status} ${text}`)
-    }
-    return res.json()
   }, [])
-
-  const handleGenerateXtc = useCallback(async () => {
-    const ren = rendererRef.current, mod = moduleRef.current
-    if (!ren || !mod || processingRef.current) return
-    processingRef.current = true; setProcessing(true)
-
-    const toastId = toast.loading("Preparing...", { duration: Infinity })
-    const startTime = performance.now()
-    const currentPage = ren.getCurrentPage()
-
-    try {
-      const settings = sRef.current
-      const bits = settings.qualityMode === "hq" ? 2 : 1
-      const isHQ = settings.qualityMode === "hq"
-      const pageCount = ren.getPageCount()
-      const { screenWidth: sw, screenHeight: sh, deviceWidth: dw, deviceHeight: dh } = screenDimsRef.current
-
-      const chapters: { name: string; startPage: number; endPage: number }[] = []
-      function extractChapters(items: TocItem[]) {
-        for (const item of items) {
-          chapters.push({ name: item.title.substring(0, 79), startPage: Math.max(0, Math.min(item.page, pageCount - 1)), endPage: -1 })
-          if (item.children?.length) extractChapters(item.children)
-        }
-      }
-      extractChapters(tocRef.current)
-      chapters.sort((a, b) => a.startPage - b.startPage)
-
-      const tempCanvas = document.createElement("canvas")
-      tempCanvas.width = sw; tempCanvas.height = sh
-      const tempCtx = tempCanvas.getContext("2d", { willReadFrequently: true })!
-
-      const pageBuffers: ArrayBuffer[] = []
-      let totalDataSize = 0
-
-      for (let pg = 0; pg < pageCount; pg++) {
-        toast.loading(`Rendering page ${pg + 1} of ${pageCount}...`, { id: toastId })
-
-        ren.goToPage(pg); ren.renderCurrentPage()
-        const buffer = ren.getFrameBuffer()
-        const imageData = tempCtx.createImageData(sw, sh)
-        imageData.data.set(buffer)
-        tempCtx.putImageData(imageData, 0, 0)
-
-        if (settings.enableDithering) {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          applyDitheringSyncToData(img.data, sw, sh, bits, settings.ditherStrength, isHQ)
-          tempCtx.putImageData(img, 0, 0)
-        } else {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          quantizeImageData(img.data, bits, isHQ)
-          tempCtx.putImageData(img, 0, 0)
-        }
-
-        if (settings.enableNegative) {
-          const img = tempCtx.getImageData(0, 0, sw, sh)
-          applyNegativeToData(img.data)
-          tempCtx.putImageData(img, 0, 0)
-        }
-
-        drawProgressIndicator(tempCtx, settings, pg, pageCount, sw, sh, tocRef.current)
-
-        let finalCanvas: HTMLCanvasElement = tempCanvas
-        const rot = settings.orientation
-        if (rot !== 0) {
-          const rc = document.createElement("canvas")
-          rc.width = dw; rc.height = dh
-          const rCtx = rc.getContext("2d")!
-          if (rot === 90) { rCtx.translate(dw, 0); rCtx.rotate(Math.PI / 2) }
-          else if (rot === 180) { rCtx.translate(dw, dh); rCtx.rotate(Math.PI) }
-          else if (rot === 270) { rCtx.translate(0, dh); rCtx.rotate(3 * Math.PI / 2) }
-          rCtx.drawImage(tempCanvas, 0, 0)
-          finalCanvas = rc
-        }
-
-        const pageData = isHQ ? generateXthData(finalCanvas) : generateXtgData(finalCanvas, 1)
-        pageBuffers.push(pageData)
-        totalDataSize += pageData.byteLength
-
-        if (pg % 10 === 0) await new Promise(r => setTimeout(r, 0))
-      }
-
-      for (let i = 0; i < chapters.length; i++) {
-        chapters[i].endPage = i < chapters.length - 1 ? chapters[i + 1].startPage - 1 : pageCount - 1
-        if (chapters[i].endPage < chapters[i].startPage) chapters[i].endPage = chapters[i].startPage
-      }
-
-      const headerSize = 56, metadataSize = 256, chapterEntrySize = 96, indexEntrySize = 16
-      const chapterCount = chapters.length
-      const metaOffset = headerSize
-      const chapOffset = metaOffset + metadataSize
-      const indexOffset = chapOffset + chapterCount * chapterEntrySize
-      const dataOffset = indexOffset + pageCount * indexEntrySize
-      const totalSize = dataOffset + totalDataSize
-
-      const buf = new ArrayBuffer(totalSize)
-      const view = new DataView(buf), arr = new Uint8Array(buf)
-
-      view.setUint8(0, 0x58); view.setUint8(1, 0x54); view.setUint8(2, 0x43)
-      view.setUint8(3, isHQ ? 0x48 : 0x00)
-      view.setUint16(4, 1, true); view.setUint16(6, pageCount, true)
-      view.setUint8(8, 0); view.setUint8(9, 1); view.setUint8(10, 0)
-      view.setUint8(11, chapterCount > 0 ? 1 : 0); view.setUint32(12, 1, true)
-
-      view.setBigUint64(16, BigInt(metaOffset), true)
-      view.setBigUint64(24, BigInt(indexOffset), true)
-      view.setBigUint64(32, BigInt(dataOffset), true)
-      view.setBigUint64(40, BigInt(0), true)
-      view.setBigUint64(48, BigInt(chapOffset), true)
-
-      const enc = new TextEncoder()
-      const titleBytes = enc.encode(metaRef.current.title || "Untitled")
-      const authorBytes = enc.encode(metaRef.current.authors || "Unknown")
-      for (let i = 0; i < Math.min(titleBytes.length, 127); i++) arr[metaOffset + i] = titleBytes[i]
-      for (let i = 0; i < Math.min(authorBytes.length, 63); i++) arr[metaOffset + 0x80 + i] = authorBytes[i]
-
-      view.setUint32(metaOffset + 0xF0, Math.floor(Date.now() / 1000), true)
-      view.setUint16(metaOffset + 0xF4, 0, true)
-      view.setUint16(metaOffset + 0xF6, chapterCount, true)
-
-      for (let i = 0; i < chapters.length; i++) {
-        const co = chapOffset + i * chapterEntrySize
-        const nb = enc.encode(chapters[i].name)
-        for (let j = 0; j < Math.min(nb.length, 79); j++) arr[co + j] = nb[j]
-        view.setUint16(co + 0x50, chapters[i].startPage + 1, true)
-        view.setUint16(co + 0x52, chapters[i].endPage + 1, true)
-      }
-
-      let absOff = dataOffset
-      for (let i = 0; i < pageCount; i++) {
-        const iea = indexOffset + i * indexEntrySize
-        view.setBigUint64(iea, BigInt(absOff), true)
-        view.setUint32(iea + 8, pageBuffers[i].byteLength, true)
-        view.setUint16(iea + 12, dw, true); view.setUint16(iea + 14, dh, true)
-        absOff += pageBuffers[i].byteLength
-      }
-
-      let wo = dataOffset
-      for (let i = 0; i < pageCount; i++) {
-        arr.set(new Uint8Array(pageBuffers[i]), wo)
-        wo += pageBuffers[i].byteLength
-      }
-
-      // Save XTC to library
-      toast.loading("Saving to library...", { id: toastId })
-      await saveToLibrary(buf, metaRef.current, settings.deviceType)
-      const updatedBooks = await fetchLibraryBooks()
-
-      // Restore preview to current page
-      ren.goToPage(currentPage)
-      renderPreview()
-
-      const totalTime = ((performance.now() - startTime) / 1000).toFixed(1)
-      const justSaved = updatedBooks?.[0]
-      if (justSaved?.filename && sRef.current.deviceHost) {
-        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, {
-          id: toastId,
-          duration: 8000,
-          action: {
-            label: "Send to device",
-            onClick: () => sendToDevice(justSaved.id),
-          },
-        })
-      } else {
-        toast.success(`Generated ${pageCount} pages in ${totalTime}s`, { id: toastId, duration: 4000 })
-      }
-    } catch (err) {
-      console.error("Generate XTC error:", err)
-      toast.error("Generation failed", { id: toastId, duration: 4000 })
-    } finally {
-      processingRef.current = false; setProcessing(false)
-    }
-  }, [saveToLibrary, fetchLibraryBooks, renderPreview, sendToDevice])
 
   // ── Initialization ──
 
@@ -1086,6 +896,7 @@ export function Converter({
 
   return (
     <DeviceProvider settings={s} updateSettings={update}>
+    <ConversionProvider fetchLibraryBooks={fetchLibraryBooks} sendToDevice={sendToDevice} deviceHost={s.deviceHost}>
     <div className="flex h-screen bg-background">
       <Sidebar
         initialTab={initialTab}
@@ -1134,7 +945,7 @@ export function Converter({
           canvasRef={canvasRef} s={s} deviceColor={deviceColor}
           bookLoaded={bookLoaded} loading={loading} loadingMsg={loadingMsg} wasmReady={wasmReady}
           page={page} pages={pages} goToPage={goToPage}
-          processing={processing} handleGenerateXtc={handleGenerateXtc}
+          getCurrentBookInfo={getCurrentBookInfo}
         />
       </div>
 
@@ -1144,6 +955,7 @@ export function Converter({
         opdsSaveSettings={opdsSaveSettings} opdsDisconnect={opdsDisconnect}
       />
     </div>
+    </ConversionProvider>
     </DeviceProvider>
   )
 }

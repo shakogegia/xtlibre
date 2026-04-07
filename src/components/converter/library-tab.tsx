@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react"
-import { Smartphone, Pencil, Download, Trash2, Ellipsis, Search } from "lucide-react"
+import { useConversion } from "@/contexts/conversion-context"
+import { Smartphone, Pencil, Download, Trash2, Ellipsis, Search, RefreshCw } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,6 +52,7 @@ export function LibraryTab({
   opdsUrl, activeBookId, libraryBooks, libraryLoading, openLibraryEpub, downloadXtc, deleteLibraryBook, updateLibraryBook,
   sendToDevice, deviceConfigured, transferring, deviceFileNames,
 }: LibraryTabProps) {
+  const { activeJobs, submitJob } = useConversion()
   const [opdsAlertDismissed, setOpdsAlertDismissed] = useState(false)
   const [editBook, setEditBook] = useState<{ id: string; title: string; author: string } | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<LibraryBook | null>(null)
@@ -71,8 +73,11 @@ export function LibraryTab({
     const sanitized = nameBase.replace(/[^a-zA-Z0-9 ._-]/g, "_").substring(0, 80).trim() + ext
     return deviceFileNames.has(sanitized)
   }
+  const convertibleBooks = libraryBooks.filter(b => b.epub_filename && !activeJobs.has(b.id))
+
   return (
     <>
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {/* Upload area */}
       <div
         className={`group relative border-2 border-dashed rounded-lg px-4 py-5 text-center cursor-pointer transition-all duration-200 mb-3 ${
@@ -193,13 +198,19 @@ export function LibraryTab({
                   <div className="flex items-center gap-1.5 mt-0.5">
                     {book.author && <span className="text-[10px] text-muted-foreground truncate">{book.author}</span>}
                     <div className="flex gap-1">
-                      {book.epub_filename && (
-                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">EPUB</Badge>
-                      )}
-                      {book.filename && (
+
+                      {book.filename && !activeJobs.has(book.id) && (
                         <Badge variant="outline" className="h-auto text-[9px] px-1 py-0">
                           {book.filename.endsWith(".xtch") ? "XTC HQ" : "XTC"}
                           {book.file_size != null && ` ${(book.file_size / (1024 * 1024)).toFixed(1)}MB`}
+                        </Badge>
+                      )}
+                      {activeJobs.has(book.id) && (
+                        <Badge variant="outline" className="h-auto text-[9px] px-1 py-0 text-amber-600 border-amber-600/30 gap-0.5">
+                          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+                          {activeJobs.get(book.id)!.status === "processing" && activeJobs.get(book.id)!.totalPages > 0
+                            ? `${activeJobs.get(book.id)!.progress}/${activeJobs.get(book.id)!.totalPages}`
+                            : "queue"}
                         </Badge>
                       )}
                       {isOnDevice(book) && (
@@ -237,6 +248,12 @@ export function LibraryTab({
                         <Pencil className="size-3.5" />
                         Edit metadata
                       </DropdownMenuItem>
+                      {book.epub_filename && !activeJobs.has(book.id) && (
+                        <DropdownMenuItem className="text-sm" onClick={() => submitJob(book.id, book.title)}>
+                          <RefreshCw className="size-3.5" />
+                          Convert
+                        </DropdownMenuItem>
+                      )}
                       {book.filename && (
                         <DropdownMenuItem className="text-sm" onClick={() => downloadXtc(book.id)}>
                           <Download className="size-3.5" />
@@ -272,6 +289,24 @@ export function LibraryTab({
             ))}
           </div>
         </ScrollArea>
+      )}
+      </div>
+
+      {convertibleBooks.length > 0 && (
+        <div className="shrink-0 pt-3 pb-3 border-t border-border/50 mt-auto">
+          <Button
+            variant="outline"
+            className="w-full h-7 text-[11px]"
+            onClick={() => {
+              for (const book of convertibleBooks) {
+                submitJob(book.id, book.title)
+              }
+            }}
+          >
+            <RefreshCw className="size-3 mr-1.5" />
+            Convert all
+          </Button>
+        </div>
       )}
 
       {/* Edit metadata dialog */}

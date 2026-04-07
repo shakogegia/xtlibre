@@ -66,11 +66,7 @@ export function applyNegativeToData(data: Uint8ClampedArray) {
   }
 }
 
-export function generateXtgData(canvas: HTMLCanvasElement, bits: number): ArrayBuffer {
-  const w = canvas.width, h = canvas.height
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })!
-  const imgData = ctx.getImageData(0, 0, w, h)
-  const data = imgData.data
+export function generateXtgData(data: Uint8ClampedArray, w: number, h: number, bits: number): ArrayBuffer {
 
   function writeHeader(view: DataView, dataSize: number, bitCode: number) {
     view.setUint8(0, 0x58); view.setUint8(1, 0x54); view.setUint8(2, 0x47); view.setUint8(3, 0x00)
@@ -132,10 +128,7 @@ export function generateXtgData(canvas: HTMLCanvasElement, bits: number): ArrayB
   }
 }
 
-export function generateXthData(canvas: HTMLCanvasElement): ArrayBuffer {
-  const w = canvas.width, h = canvas.height
-  const ctx = canvas.getContext("2d", { willReadFrequently: true })!
-  const data = ctx.getImageData(0, 0, w, h).data
+export function generateXthData(data: Uint8ClampedArray, w: number, h: number): ArrayBuffer {
   const bpc = Math.ceil(h / 8), planeSize = bpc * w, ds = planeSize * 2
   const buf = new ArrayBuffer(22 + ds), v = new DataView(buf), arr = new Uint8Array(buf)
 
@@ -156,11 +149,3 @@ export function generateXthData(canvas: HTMLCanvasElement): ArrayBuffer {
   return buf
 }
 
-export function downloadFile(data: ArrayBuffer, filename: string) {
-  const blob = new Blob([data], { type: "application/octet-stream" })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement("a")
-  a.href = url; a.download = filename
-  document.body.appendChild(a); a.click()
-  setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url) }, 100)
-}

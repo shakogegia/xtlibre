@@ -5,6 +5,8 @@ import { Slider } from "@/components/ui/slider"
 import { Button } from "@/components/ui/button"
 import { type Settings, type DeviceColor } from "@/lib/types"
 import { DEVICE_BEZELS, DEVICE_COLORS, TRUE_LIFE_CSS_PPI, getScreenDimensions } from "@/lib/device"
+import { useConversion } from "@/contexts/conversion-context"
+import { toast } from "sonner"
 
 interface DevicePreviewProps {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
@@ -17,14 +19,25 @@ interface DevicePreviewProps {
   page: number
   pages: number
   goToPage: (pg: number) => void
-  processing: boolean
-  handleGenerateXtc: () => void
+  getCurrentBookInfo: () => { bookId: string | null; bookTitle: string }
 }
 
 export function DevicePreview({
   canvasRef, s, deviceColor, bookLoaded, loading, loadingMsg, wasmReady,
-  page, pages, goToPage, processing, handleGenerateXtc,
+  page, pages, goToPage, getCurrentBookInfo,
 }: DevicePreviewProps) {
+  const { submitJob, getJobStatus } = useConversion()
+  const { bookId } = getCurrentBookInfo()
+  const jobStatus = bookId ? getJobStatus(bookId) : null
+
+  const handleGenerate = () => {
+    const { bookId, bookTitle } = getCurrentBookInfo()
+    if (!bookId) {
+      toast.error("EPUB not saved to library yet. Please wait and try again.")
+      return
+    }
+    submitJob(bookId, bookTitle)
+  }
   const dims = getScreenDimensions(s.deviceType, s.orientation)
 
   // Compute bezel layout based on device type and orientation
@@ -173,19 +186,33 @@ export function DevicePreview({
             </div>
           )}
 
-          {/* Generate XTC */}
+          {/* Convert */}
           <Button
             className="w-full h-8 text-[12px] font-medium"
-            disabled={!bookLoaded || processing}
-            onClick={handleGenerateXtc}
+            disabled={!bookLoaded || !!jobStatus}
+            onClick={handleGenerate}
           >
-            {processing ? (
+            {jobStatus ? (
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mr-1.5 animate-spin"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
             ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-1.5"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
             )}
-            {s.qualityMode === "hq" ? "Generate XTC (HQ)" : "Generate XTC (Fast)"}
+            {jobStatus
+              ? jobStatus.status === "processing" && jobStatus.totalPages > 0
+                ? `Converting ${jobStatus.progress}/${jobStatus.totalPages}...`
+                : "In queue..."
+              : s.qualityMode === "hq" ? "Convert (HQ)" : "Convert (Fast)"}
           </Button>
+          <div className="w-full h-1 rounded-full bg-muted overflow-hidden transition-opacity duration-300" style={{ opacity: jobStatus && jobStatus.totalPages > 0 ? 1 : 0 }}>
+            <div
+              className="h-full bg-foreground/70 transition-all duration-300"
+              style={{
+                width: jobStatus && jobStatus.totalPages > 0
+                  ? `${Math.round((jobStatus.progress / jobStatus.totalPages) * 100)}%`
+                  : "0%",
+              }}
+            />
+          </div>
         </div>
       </div>
 

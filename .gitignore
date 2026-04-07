@@ -42,3 +42,6 @@ next-env.d.ts
 
 # library data
 /data
+
+# git worktrees
+.worktrees/
