@@ -32,6 +32,76 @@ export function ConversionProvider({
   const deviceHostRef = useRef(deviceHost)
   deviceHostRef.current = deviceHost
 
+  // Track which jobs we're already polling so we don't double-poll
+  const pollingRef = useRef(new Set<string>())
+  const cancelledRef = useRef(false)
+
+  const startPolling = useCallback((jobId: string, bookId: string, bookTitle: string) => {
+    if (pollingRef.current.has(jobId)) return
+    pollingRef.current.add(jobId)
+
+    setActiveJobs(prev => new Map(prev).set(bookId, { status: "pending", progress: 0, totalPages: 0 }))
+
+    const pollStart = Date.now()
+    const MAX_POLL_MS = 30 * 60 * 1000
+
+    const poll = async (): Promise<void> => {
+      if (cancelledRef.current) { pollingRef.current.delete(jobId); return }
+      if (Date.now() - pollStart > MAX_POLL_MS) {
+        pollingRef.current.delete(jobId)
+        setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+        toast.error(`"${bookTitle}" timed out — worker may not be running`)
+        return
+      }
+
+      const res = await fetch(`/api/convert/${jobId}`)
+      if (!res.ok) {
+        pollingRef.current.delete(jobId)
+        setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+        return
+      }
+      const status = await res.json()
+
+      if (status.status === "completed") {
+        pollingRef.current.delete(jobId)
+        setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+        const updatedBooks = await fetchLibraryBooks()
+        const justSaved = updatedBooks?.find((b: { id: string }) => b.id === bookId)
+        if (justSaved?.filename && deviceHostRef.current) {
+          toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`, {
+            duration: 8000,
+            action: {
+              label: "Send to device",
+              onClick: () => sendToDevice(justSaved.id),
+            },
+            actionButtonStyle: { background: "transparent", border: "1px solid currentColor", color: "inherit" },
+          })
+        } else {
+          toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`)
+        }
+        return
+      }
+
+      if (status.status === "failed") {
+        pollingRef.current.delete(jobId)
+        setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
+        toast.error(`"${bookTitle}" failed: ${status.error || "Unknown error"}`)
+        return
+      }
+
+      setActiveJobs(prev => new Map(prev).set(bookId, {
+        status: status.status,
+        progress: status.progress,
+        totalPages: status.totalPages,
+      }))
+
+      await new Promise(r => setTimeout(r, 500))
+      return poll()
+    }
+
+    poll()
+  }, [fetchLibraryBooks, sendToDevice])
+
   const submitJob = useCallback(async (bookId: string, bookTitle: string) => {
     try {
       const res = await fetch("/api/convert", {
@@ -44,146 +114,34 @@ export function ConversionProvider({
         throw new Error(err.error || "Failed to submit job")
       }
       const { job_id } = await res.json()
-      sessionStorage.setItem("xtc-active-job", JSON.stringify({ jobId: job_id, bookId, bookTitle }))
-
-      setActiveJobs(prev => new Map(prev).set(bookId, { status: "pending", progress: 0, totalPages: 0 }))
-
-      const pollStart = Date.now()
-      const MAX_POLL_MS = 30 * 60 * 1000
-
-      const poll = async (): Promise<void> => {
-        if (Date.now() - pollStart > MAX_POLL_MS) {
-          sessionStorage.removeItem("xtc-active-job")
-          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-          toast.error("Conversion timed out — worker may not be running")
-          return
-        }
-        const statusRes = await fetch(`/api/convert/${job_id}`)
-        if (!statusRes.ok) {
-          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-          toast.error("Failed to check job status")
-          return
-        }
-        const status = await statusRes.json()
-
-        if (status.status === "completed") {
-          sessionStorage.removeItem("xtc-active-job")
-          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-          const updatedBooks = await fetchLibraryBooks()
-          const justSaved = updatedBooks?.[0]
-          if (justSaved?.filename && deviceHostRef.current) {
-            toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`, {
-              duration: 8000,
-              action: {
-                label: "Send to device",
-                onClick: () => sendToDevice(justSaved.id),
-              },
-              actionButtonStyle: { background: "transparent", border: "1px solid currentColor", color: "inherit" },
-            })
-          } else {
-            toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`)
-          }
-          return
-        }
-
-        if (status.status === "failed") {
-          sessionStorage.removeItem("xtc-active-job")
-          setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-          toast.error(status.error || "Conversion failed")
-          return
-        }
-
-        setActiveJobs(prev => new Map(prev).set(bookId, {
-          status: status.status,
-          progress: status.progress,
-          totalPages: status.totalPages,
-        }))
-
-        await new Promise(r => setTimeout(r, 500))
-        return poll()
-      }
-
-      poll()
+      startPolling(job_id, bookId, bookTitle)
     } catch (err) {
       console.error("Generate XTC error:", err)
       toast.error(err instanceof Error ? err.message : "Generation failed")
     }
-  }, [fetchLibraryBooks, sendToDevice])
+  }, [startPolling])
 
   const getJobStatus = useCallback((bookId: string): JobStatus | null => {
     return activeJobs.get(bookId) ?? null
   }, [activeJobs])
 
-  // Resume polling for active jobs on mount
+  // On mount: fetch all active jobs from the server and resume polling
   React.useEffect(() => {
-    let cancelled = false
-    async function checkActiveJobs() {
+    cancelledRef.current = false
+    async function resumeActiveJobs() {
       try {
-        const raw = sessionStorage.getItem("xtc-active-job")
-        if (!raw) return
-        let jobId: string, bookId: string, bookTitle: string
-        try {
-          const parsed = JSON.parse(raw)
-          jobId = parsed.jobId; bookId = parsed.bookId; bookTitle = parsed.bookTitle || "Book"
-        } catch {
-          sessionStorage.removeItem("xtc-active-job")
-          return
-        }
-        if (!jobId || !bookId) { sessionStorage.removeItem("xtc-active-job"); return }
+        const res = await fetch("/api/convert")
+        if (!res.ok) return
+        const jobs: { id: string; book_id: string; book_title: string; status: string; progress: number; totalPages: number }[] = await res.json()
 
-        const res = await fetch(`/api/convert/${jobId}`)
-        if (!res.ok) { sessionStorage.removeItem("xtc-active-job"); return }
-        const status = await res.json()
-
-        if (status.status === "pending" || status.status === "processing") {
-          setActiveJobs(prev => new Map(prev).set(bookId, { status: status.status, progress: status.progress, totalPages: status.totalPages }))
-
-          const pollStart = Date.now()
-          const MAX_POLL_MS = 30 * 60 * 1000
-
-          const poll = async (): Promise<void> => {
-            if (cancelled) return
-            if (Date.now() - pollStart > MAX_POLL_MS) {
-              sessionStorage.removeItem("xtc-active-job")
-              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-              toast.error("Conversion timed out — worker may not be running")
-              return
-            }
-            const statusRes = await fetch(`/api/convert/${jobId}`)
-            if (!statusRes.ok) {
-              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-              return
-            }
-            const s = await statusRes.json()
-
-            if (s.status === "completed") {
-              sessionStorage.removeItem("xtc-active-job")
-              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-              await fetchLibraryBooks()
-              toast.success(`"${bookTitle}" ready — ${s.totalPages} pages`)
-              return
-            }
-            if (s.status === "failed") {
-              sessionStorage.removeItem("xtc-active-job")
-              setActiveJobs(prev => { const m = new Map(prev); m.delete(bookId); return m })
-              toast.error(s.error || "Conversion failed")
-              return
-            }
-
-            setActiveJobs(prev => new Map(prev).set(bookId, { status: s.status, progress: s.progress, totalPages: s.totalPages }))
-            await new Promise(r => setTimeout(r, 500))
-            return poll()
-          }
-
-          poll()
-        } else {
-          sessionStorage.removeItem("xtc-active-job")
+        for (const job of jobs) {
+          startPolling(job.id, job.book_id, job.book_title)
         }
       } catch { /* ignore */ }
     }
-    checkActiveJobs()
-    return () => { cancelled = true }
-  }, [fetchLibraryBooks, sendToDevice])
+    resumeActiveJobs()
+    return () => { cancelledRef.current = true }
+  }, [startPolling])
 
   return (
     <ConversionContext.Provider value={{ activeJobs, submitJob, getJobStatus }}>

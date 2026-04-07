@@ -2,10 +2,28 @@ import { NextRequest } from "next/server"
 import { randomUUID } from "crypto"
 import { requireAuth } from "@/lib/auth"
 import { getBook, getSettings, getLibraryDir } from "@/lib/db"
-import { createJob } from "@/lib/conversion-jobs"
+import { createJob, getActiveJobs } from "@/lib/conversion-jobs"
 import { DEFAULT_SETTINGS } from "@/lib/settings-schema"
 import fs from "fs"
 import path from "path"
+
+export async function GET(request: NextRequest) {
+  const denied = await requireAuth(request)
+  if (denied) return denied
+
+  const jobs = getActiveJobs()
+  return Response.json(jobs.map(j => {
+    const book = getBook(j.book_id)
+    return {
+      id: j.id,
+      book_id: j.book_id,
+      book_title: book?.title || "Book",
+      status: j.status,
+      progress: j.progress,
+      totalPages: j.total_pages,
+    }
+  }))
+}
 
 export async function POST(request: NextRequest) {
   const denied = await requireAuth(request)
