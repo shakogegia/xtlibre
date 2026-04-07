@@ -73,8 +73,11 @@ export function LibraryTab({
     const sanitized = nameBase.replace(/[^a-zA-Z0-9 ._-]/g, "_").substring(0, 80).trim() + ext
     return deviceFileNames.has(sanitized)
   }
+  const convertibleBooks = libraryBooks.filter(b => b.epub_filename && !activeJobs.has(b.id))
+
   return (
     <>
+      <div className="flex-1 min-h-0 overflow-y-auto">
       {/* Upload area */}
       <div
         className={`group relative border-2 border-dashed rounded-lg px-4 py-5 text-center cursor-pointer transition-all duration-200 mb-3 ${
@@ -287,17 +290,16 @@ export function LibraryTab({
           </div>
         </ScrollArea>
       )}
+      </div>
 
-      {libraryBooks.some(b => b.epub_filename && !activeJobs.has(b.id)) && (
-        <div className="pt-3 mt-auto">
+      {convertibleBooks.length > 0 && (
+        <div className="shrink-0 pt-3 pb-3 border-t border-border/50 mt-auto">
           <Button
             variant="outline"
             className="w-full h-7 text-[11px]"
             onClick={() => {
-              for (const book of libraryBooks) {
-                if (book.epub_filename && !activeJobs.has(book.id)) {
-                  submitJob(book.id, book.title)
-                }
+              for (const book of convertibleBooks) {
+                submitJob(book.id, book.title)
               }
             }}
           >
