@@ -68,7 +68,7 @@ export function ConversionProvider({
         const updatedBooks = await fetchLibraryBooks()
         const justSaved = updatedBooks?.find((b: { id: string }) => b.id === bookId)
         if (justSaved?.filename && deviceHostRef.current) {
-          toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`, {
+          toast.success(`"${bookTitle}" is ready`, {
             duration: 8000,
             action: {
               label: "Send to device",
@@ -77,7 +77,7 @@ export function ConversionProvider({
             actionButtonStyle: { background: "transparent", border: "1px solid currentColor", color: "inherit" },
           })
         } else {
-          toast.success(`"${bookTitle}" ready — ${status.totalPages} pages`)
+          toast.success(`"${bookTitle}" is ready`)
         }
         return
       }
