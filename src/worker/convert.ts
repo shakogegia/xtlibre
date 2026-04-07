@@ -98,11 +98,8 @@ let wasmModule: any = null
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let renderer: any = null
 
-async function initCREngine(screenWidth: number, screenHeight: number): Promise<void> {
-  if (wasmModule && renderer) {
-    renderer.resize(screenWidth, screenHeight)
-    return
-  }
+async function ensureWasmLoaded(): Promise<void> {
+  if (wasmModule) return
 
   const crEnginePath = path.join(PUBLIC_DIR, "lib", "crengine.js")
   const CREngine = require(crEnginePath)
@@ -116,9 +113,15 @@ async function initCREngine(screenWidth: number, screenHeight: number): Promise<
       }
     },
   })
+}
 
+function createRenderer(screenWidth: number, screenHeight: number) {
+  // Always create a fresh renderer to avoid stale state between books
   renderer = new wasmModule.EpubRenderer(screenWidth, screenHeight)
   if (renderer.initHyphenation) renderer.initHyphenation("/hyph")
+  // Fonts need to be re-registered on the new renderer
+  loadedFonts.clear()
+  loadedPatterns.clear()
 }
 
 // ── Font loading ──
@@ -245,8 +248,9 @@ async function processJob(job: JobRow): Promise<void> {
 
   const { screenWidth: sw, screenHeight: sh, deviceWidth: dw, deviceHeight: dh } = getScreenDimensions(settings.deviceType, settings.orientation)
 
-  // Init CREngine
-  await initCREngine(sw, sh)
+  // Init CREngine — fresh renderer per job to avoid stale WASM state
+  await ensureWasmLoaded()
+  createRenderer(sw, sh)
   await loadRequiredFonts()
 
   // Load the requested font
